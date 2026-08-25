@@ -110,57 +110,23 @@ ORDER BY event_date, segment, model, attribution_window;
 
 
 -- -----------------------------------------------------------------------------
--- QUERY 4 of 4: Meta In-App Purchases & CPA — ads_table
+-- QUERY 4 of 4: Meta Platform-Reported Purchases & CPA — ads_table
 -- Covers: meta_inapp_purchases, meta_in_app_cpa
 -- Target BQ table: e.g. tsm_meta_inapp
 --
--- ⚠  STATUS: DRAFT — action_type NOT YET CONFIRMED
---
--- Context:
---   - ads_table.onsite_purchases = 0 for this account (no Meta Shop)
---   - Sheet shows 2,530 purchases on Aug 1 (spend $207,561.88 → CPA ~$82)
---   - Source is ads_table.actions array (a Meta mobile-app or website event)
---   - The exact action_type string must be read from the TW dashboard tile
---
--- To confirm action_type: run the DISCOVERY QUERY below in Willy SQL Studio
--- (do NOT load into Daton). The row with seven_day_click closest to 2,530
--- is the action_type to substitute in the production query.
---
--- DISCOVERY QUERY — purchase-filtered (run once in Willy):
---   SELECT
---       action.action_type,
---       action.display_name,
---       SUM(action.seven_day_click)       AS seven_day_click_actions,
---       SUM(action.one_day_view)          AS one_day_view_actions,
---       SUM(action.seven_day_click_value) AS seven_day_click_value,
---       SUM(action.one_day_view_value)    AS one_day_view_value
---   FROM ads_table AS adt
---   ARRAY JOIN adt.actions AS action
---   WHERE adt.channel = 'facebook-ads'
---     AND adt.event_date = toDate('2024-08-01')
---     AND (action.action_type ILIKE '%purchase%'
---          OR action.display_name ILIKE '%purchase%')
---   GROUP BY action.action_type, action.display_name
---   ORDER BY seven_day_click_actions DESC
---   LIMIT 20;
---
--- Expected candidates: 'omni_purchase', 'offsite_conversion.fb_pixel_purchase',
---   'app_custom_event.fb_mobile_purchase'
--- Note: keep seven_day_click and one_day_view SEPARATE — adding them
---       can double-count depending on Meta's attribution config.
+-- ✅ STATUS: VALIDATED
+-- Source: ads_table.conversions — Meta's normalized platform-reported purchase
+--         count received from the Meta integration. NOT onsite_purchases,
+--         NOT the actions array. Verified Aug 1 2026:
+--           spend = $207,561.88 | conversions = 2,530 | CPA = $82.04
 -- -----------------------------------------------------------------------------
-
--- PRODUCTION QUERY (substitute confirmed action_type before loading into Daton):
 SELECT
     event_date,
-    SUM(adt.spend)                                       AS meta_total_spend,
-    SUM(action.seven_day_click)                          AS meta_inapp_purchases,
-    SUM(adt.spend)
-        / NULLIF(SUM(action.seven_day_click), 0)         AS meta_in_app_cpa
-FROM ads_table AS adt
-ARRAY JOIN adt.actions AS action
-WHERE adt.channel = 'facebook-ads'
-  AND action.action_type = '<CONFIRM_ACTION_TYPE>'
-  AND adt.event_date BETWEEN @startDate AND @endDate
+    SUM(spend)                                        AS meta_total_spend,
+    SUM(conversions)                                  AS meta_inapp_purchases,
+    SUM(spend) / NULLIF(SUM(conversions), 0)          AS meta_in_app_cpa
+FROM ads_table
+WHERE channel = 'facebook-ads'
+  AND event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date
 ORDER BY event_date;

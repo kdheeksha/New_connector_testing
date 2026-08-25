@@ -23,10 +23,10 @@ All 20 Google Sheet metrics and how each one is derived from the 4 Daton queries
 | `triple_whale_meta_ncp_firt_click` *(typo in source)* | tsm_meta_pixel | `Clicks & Views` | `7_days` | `total_ncp` |
 | `triple_whale_meta_ncp_lat_click` *(typo in source)* | tsm_meta_pixel | `Last Click` | `7_days` | `total_ncp` |
 | `triple_whale_meta_ncp_triple_att_7d` | tsm_meta_pixel | `Triple Attribution` | `lifetime` | `total_ncp` |
-| `meta_inapp_purchases` | tsm_meta_inapp | — | — | `meta_inapp_purchases` ⚠ |
-| `meta_in_app_cpa` | tsm_meta_inapp | — | — | `meta_in_app_cpa` ⚠ |
+| `meta_inapp_purchases` | tsm_meta_inapp | — | — | `meta_inapp_purchases` |
+| `meta_in_app_cpa` | tsm_meta_inapp | — | — | `meta_in_app_cpa` |
 
-⚠ = action_type not yet confirmed; see Query 4 notes.
+Source: `ads_table.conversions` — Meta's normalized platform-reported purchase count. Not onsite_purchases, not the actions array. Verified Aug 1 2026: spend $207,561.88 / conversions 2,530 / CPA $82.04.
 
 ### Meta 28-day equivalents
 | Metric | model | attribution_window |
@@ -96,7 +96,7 @@ Same structure — replace `attribution_window` with `28_days` for the relevant 
 | DG FC / LC / TA | ✅ Validated (LC volatility = 0-3 orders/day, expected) |
 | Prospecting FC / LC / TA | ✅ Validated (sheet shows 0 — team stopped entering; SQL correct) |
 | 28-day windows | ⏳ Pending first connector run |
-| meta_inapp_purchases / meta_in_app_cpa | ⚠ Pending action_type confirmation |
+| meta_inapp_purchases / meta_in_app_cpa | ✅ Validated — ads_table.conversions |
 
 ---
 
