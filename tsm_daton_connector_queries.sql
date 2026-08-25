@@ -107,12 +107,8 @@ WHERE channel = 'google-ads'
      OR campaign_name LIKE '%Demand Gen%'
      OR campaign_name LIKE '%Prospecting%'
   )
-  AND (
-        (model IN ('First Click', 'Last Click')
-         AND attribution_window IN ('lifetime', '7_days', '28_days'))
-     OR (model = 'Triple Attribution'
-         AND attribution_window IN ('lifetime', '28_days'))
-  )
+  AND model IN ('First Click', 'Last Click', 'Triple Attribution')
+  AND attribution_window IN ('lifetime', '7_days', '28_days')
   AND event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date, segment, model, attribution_window
 ORDER BY event_date, segment, model, attribution_window;
