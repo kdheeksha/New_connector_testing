@@ -83,7 +83,8 @@ ORDER BY event_date, model, attribution_window;
 -- Covers: brand / dg / prospecting × first_touch / last_touch / triple_att
 --         (9 sheet metrics + 28-day equivalents)
 -- Target BQ table: e.g. tsm_google_segments_pixel
--- Campaign filters validated for Aug 2024 (100% coverage on Aug 1 test):
+-- Campaign segmentation via CASE in SELECT (not WHERE) to avoid ClickHouse
+-- optimizer limit (10000). Filter segment != 'Other' downstream in BQ.
 --   Brand:       campaign_name LIKE '%Brand%'
 --   Demand Gen:  campaign_name LIKE '%Demand Gen%'
 --   Prospecting: campaign_name LIKE '%Prospecting%'
@@ -91,9 +92,10 @@ ORDER BY event_date, model, attribution_window;
 SELECT
     event_date,
     CASE
-        WHEN campaign_name LIKE '%Brand%'      THEN 'Brand'
-        WHEN campaign_name LIKE '%Demand Gen%' THEN 'DG'
+        WHEN campaign_name LIKE '%Brand%'       THEN 'Brand'
+        WHEN campaign_name LIKE '%Demand Gen%'  THEN 'DG'
         WHEN campaign_name LIKE '%Prospecting%' THEN 'Prospecting'
+        ELSE 'Other'
     END                                               AS segment,
     model,
     attribution_window,
@@ -102,11 +104,6 @@ SELECT
     SUM(spend) / NULLIF(SUM(new_customer_orders), 0)  AS nccpa
 FROM pixel_joined_tvf()
 WHERE channel = 'google-ads'
-  AND (
-        campaign_name LIKE '%Brand%'
-     OR campaign_name LIKE '%Demand Gen%'
-     OR campaign_name LIKE '%Prospecting%'
-  )
   AND model IN ('First Click', 'Last Click', 'Triple Attribution')
   AND attribution_window IN ('lifetime', '7_days', '28_days')
   AND event_date BETWEEN @startDate AND @endDate
