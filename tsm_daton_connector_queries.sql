@@ -17,14 +17,17 @@
 
 -- -----------------------------------------------------------------------------
 -- QUERY 1 of 4: Meta (Facebook Ads) — pixel_joined_tvf
--- Covers: meta_cac_triple_att_7d, meta_ncp_triple_att_7d (plus 28-day equivalent)
+-- Covers: meta_cac_first_touch_7d, meta_cac_last_touch_7d,
+--         meta_cac_triple_att_7d, meta_ncp_first_click, meta_ncp_last_click,
+--         meta_ncp_triple_att_7d  (plus 28-day equivalents)
 -- Target BQ table: e.g. tsm_meta_pixel
 --
--- NOTE: This account only has Triple Attribution enabled for facebook-ads in
--- Triple Whale. Clicks & Views and Last Click models do not exist in
--- pixel_joined_tvf() for this account (confirmed via DISTINCT query Jan–Aug 2026).
--- meta_cac_first_touch_7d, meta_cac_last_touch_7d, meta_ncp_firt_click, and
--- meta_ncp_lat_click must remain manually entered in the Google Sheet.
+-- Validated attribution model / window map (facebook-ads):
+--   First Click  / lifetime  → first_touch_7d  (avg gap 0.44%, max 0.61%)
+--   Last Click   / 7_days    → last_touch_7d   (avg gap 0.84%, max 1.23%)
+--   Triple Attr  / lifetime  → triple_att_7d   (validated earlier)
+-- Note: "first_touch_7d" column name is misleading — lifetime window is the
+-- correct match, same pattern as Google First Click.
 -- -----------------------------------------------------------------------------
 SELECT
     event_date,
@@ -35,8 +38,14 @@ SELECT
     SUM(spend) / NULLIF(SUM(new_customer_orders), 0)  AS nccpa
 FROM pixel_joined_tvf()
 WHERE channel = 'facebook-ads'
-  AND model = 'Triple Attribution'
-  AND attribution_window IN ('lifetime', '28_days')
+  AND (
+        (model = 'First Click'
+         AND attribution_window IN ('lifetime', '28_days'))
+     OR (model = 'Last Click'
+         AND attribution_window IN ('7_days', '28_days'))
+     OR (model = 'Triple Attribution'
+         AND attribution_window IN ('lifetime', '28_days'))
+  )
   AND event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date, model, attribution_window
 ORDER BY event_date, model, attribution_window;
