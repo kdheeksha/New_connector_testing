@@ -5,12 +5,12 @@
 -- Max 5 queries; each becomes one BigQuery table
 -- =============================================================================
 -- Validated attribution model / window map:
---   facebook-ads | Clicks & Views   | 7_days   (first-touch 7d)
---   facebook-ads | Last Click       | 7_days   (last-touch 7d)
---   facebook-ads | Triple Attribution | lifetime (TA standard)
---   google-ads   | First Click      | lifetime  (first-touch — lifetime window matches TW tile)
---   google-ads   | Last Click       | 7_days    (last-touch 7d)
---   google-ads   | Triple Attribution | lifetime (TA standard)
+--   facebook-ads | First Click        | lifetime  (first-touch — lifetime window matches TW tile)
+--   facebook-ads | Last Click         | 7_days    (last-touch 7d)
+--   facebook-ads | Triple Attribution | lifetime  (TA standard)
+--   google-ads   | First Click        | lifetime  (first-touch — lifetime window matches TW tile)
+--   google-ads   | Last Click         | 7_days    (last-touch 7d)
+--   google-ads   | Triple Attribution | lifetime  (TA standard)
 -- 28-day rows included for all models/channels via attribution_window='28_days'
 -- =============================================================================
 
