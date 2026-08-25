@@ -17,10 +17,14 @@
 
 -- -----------------------------------------------------------------------------
 -- QUERY 1 of 4: Meta (Facebook Ads) — pixel_joined_tvf
--- Covers: meta_cac_first_touch_7d, meta_cac_last_touch_7d,
---         meta_cac_triple_att_7d, meta_ncp_first_click, meta_ncp_last_click,
---         meta_ncp_triple_att_7d  (plus 28-day equivalents)
+-- Covers: meta_cac_triple_att_7d, meta_ncp_triple_att_7d (plus 28-day equivalent)
 -- Target BQ table: e.g. tsm_meta_pixel
+--
+-- NOTE: This account only has Triple Attribution enabled for facebook-ads in
+-- Triple Whale. Clicks & Views and Last Click models do not exist in
+-- pixel_joined_tvf() for this account (confirmed via DISTINCT query Jan–Aug 2026).
+-- meta_cac_first_touch_7d, meta_cac_last_touch_7d, meta_ncp_firt_click, and
+-- meta_ncp_lat_click must remain manually entered in the Google Sheet.
 -- -----------------------------------------------------------------------------
 SELECT
     event_date,
@@ -31,12 +35,8 @@ SELECT
     SUM(spend) / NULLIF(SUM(new_customer_orders), 0)  AS nccpa
 FROM pixel_joined_tvf()
 WHERE channel = 'facebook-ads'
-  AND (
-        (model IN ('Clicks & Views', 'Last Click')
-         AND attribution_window IN ('7_days', '28_days'))
-     OR (model = 'Triple Attribution'
-         AND attribution_window IN ('lifetime', '28_days'))
-  )
+  AND model = 'Triple Attribution'
+  AND attribution_window IN ('lifetime', '28_days')
   AND event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date, model, attribution_window
 ORDER BY event_date, model, attribution_window;

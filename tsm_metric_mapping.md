@@ -15,16 +15,16 @@ All 20 Google Sheet metrics and how each one is derived from the 4 Daton queries
 
 ## Meta metrics (Sheet columns → BQ filter)
 
-| Sheet column | Table | model | attribution_window | Value column |
-|---|---|---|---|---|
-| `triple_whale_meta_cac_first_touch_7d` | tsm_meta_pixel | `Clicks & Views` | `7_days` | `nccpa` |
-| `triple_whale_meta_cac_last_touch_7d` | tsm_meta_pixel | `Last Click` | `7_days` | `nccpa` |
-| `triple_whale_meta_cac_triple_att_7d` | tsm_meta_pixel | `Triple Attribution` | `lifetime` | `nccpa` |
-| `triple_whale_meta_ncp_firt_click` *(typo in source)* | tsm_meta_pixel | `Clicks & Views` | `7_days` | `total_ncp` |
-| `triple_whale_meta_ncp_lat_click` *(typo in source)* | tsm_meta_pixel | `Last Click` | `7_days` | `total_ncp` |
-| `triple_whale_meta_ncp_triple_att_7d` | tsm_meta_pixel | `Triple Attribution` | `lifetime` | `total_ncp` |
-| `meta_inapp_purchases` | tsm_meta_inapp | — | — | `meta_inapp_purchases` |
-| `meta_in_app_cpa` | tsm_meta_inapp | — | — | `meta_in_app_cpa` |
+| Sheet column | Table | model | attribution_window | Value column | Source |
+|---|---|---|---|---|---|
+| `triple_whale_meta_cac_first_touch_7d` | — | — | — | — | ❌ Manual entry only — Clicks & Views not in TVF for this account |
+| `triple_whale_meta_cac_last_touch_7d` | — | — | — | — | ❌ Manual entry only — Last Click not in TVF for this account |
+| `triple_whale_meta_cac_triple_att_7d` | tsm_meta_pixel | `Triple Attribution` | `lifetime` | `nccpa` | ✅ Connector |
+| `triple_whale_meta_ncp_firt_click` *(typo in source)* | — | — | — | — | ❌ Manual entry only — Clicks & Views not in TVF for this account |
+| `triple_whale_meta_ncp_lat_click` *(typo in source)* | — | — | — | — | ❌ Manual entry only — Last Click not in TVF for this account |
+| `triple_whale_meta_ncp_triple_att_7d` | tsm_meta_pixel | `Triple Attribution` | `lifetime` | `total_ncp` | ✅ Connector |
+| `meta_inapp_purchases` | tsm_meta_inapp | — | — | `meta_inapp_purchases` | ✅ Connector |
+| `meta_in_app_cpa` | tsm_meta_inapp | — | — | `meta_in_app_cpa` | ✅ Connector |
 
 Source: `ads_table.conversions` — Meta's normalized platform-reported purchase count. Not onsite_purchases, not the actions array. Verified Aug 1 2026: spend $207,561.88 / conversions 2,530 / CPA $82.04.
 
@@ -86,8 +86,8 @@ Same structure — replace `attribution_window` with `28_days` for the relevant 
 
 | Metric group | Status |
 |---|---|
-| Meta Clicks & Views (7d) | ✅ Validated |
-| Meta Last Click (7d) | ✅ Validated |
+| Meta Clicks & Views (7d) | ❌ Not available — model not enabled for this account in Triple Whale |
+| Meta Last Click (7d) | ❌ Not available — model not enabled for this account in Triple Whale |
 | Meta Triple Attribution (lifetime) | ✅ Validated |
 | Google First Click (lifetime window) | ✅ Validated (avg gap 0.38%, max 0.97%) |
 | Google Last Click (7d) | ✅ Validated |
