@@ -122,52 +122,45 @@ ORDER BY event_date, segment, model, attribution_window;
 --   - Source is ads_table.actions array (a Meta mobile-app or website event)
 --   - The exact action_type string must be read from the TW dashboard tile
 --
--- To confirm action_type: in Willy SQL Studio run the discovery query below,
--- then replace '<CONFIRM_ACTION_TYPE>' in the production query with the result.
+-- To confirm action_type: run the DISCOVERY QUERY below in Willy SQL Studio
+-- (do NOT load into Daton). The row with seven_day_click closest to 2,530
+-- is the action_type to substitute in the production query.
 --
--- DISCOVERY QUERY (run once in Willy — do not load into Daton):
+-- DISCOVERY QUERY — purchase-filtered (run once in Willy):
 --   SELECT
 --       action.action_type,
---       SUM(CAST(action.value AS FLOAT64)) AS total_value
---   FROM ads_table
---   CROSS JOIN UNNEST(actions) AS action
---   WHERE channel = 'facebook-ads'
---     AND event_date = '2024-08-01'
---   GROUP BY action.action_type
---   ORDER BY total_value DESC
+--       action.display_name,
+--       SUM(action.seven_day_click)       AS seven_day_click_actions,
+--       SUM(action.one_day_view)          AS one_day_view_actions,
+--       SUM(action.seven_day_click_value) AS seven_day_click_value,
+--       SUM(action.one_day_view_value)    AS one_day_view_value
+--   FROM ads_table AS adt
+--   ARRAY JOIN adt.actions AS action
+--   WHERE adt.channel = 'facebook-ads'
+--     AND adt.event_date = toDate('2024-08-01')
+--     AND (action.action_type ILIKE '%purchase%'
+--          OR action.display_name ILIKE '%purchase%')
+--   GROUP BY action.action_type, action.display_name
+--   ORDER BY seven_day_click_actions DESC
 --   LIMIT 20;
 --
--- Look for the row whose total_value is closest to 2,530 — that is the
--- action_type to substitute below. Common candidates:
---   'offsite_conversion.fb_pixel_purchase'
+-- Expected candidates: 'omni_purchase', 'offsite_conversion.fb_pixel_purchase',
 --   'app_custom_event.fb_mobile_purchase'
+-- Note: keep seven_day_click and one_day_view SEPARATE — adding them
+--       can double-count depending on Meta's attribution config.
 -- -----------------------------------------------------------------------------
 
--- PRODUCTION QUERY (activate once action_type is confirmed):
+-- PRODUCTION QUERY (substitute confirmed action_type before loading into Daton):
 SELECT
     event_date,
-    SUM(adt.spend)                                        AS meta_total_spend,
-    SUM(CAST(action.value AS FLOAT64))                    AS meta_inapp_purchases,
+    SUM(adt.spend)                                       AS meta_total_spend,
+    SUM(action.seven_day_click)                          AS meta_inapp_purchases,
     SUM(adt.spend)
-        / NULLIF(SUM(CAST(action.value AS FLOAT64)), 0)   AS meta_in_app_cpa
+        / NULLIF(SUM(action.seven_day_click), 0)         AS meta_in_app_cpa
 FROM ads_table AS adt
-CROSS JOIN UNNEST(adt.actions) AS action
+ARRAY JOIN adt.actions AS action
 WHERE adt.channel = 'facebook-ads'
   AND action.action_type = '<CONFIRM_ACTION_TYPE>'
   AND adt.event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date
 ORDER BY event_date;
-
--- INTERIM FALLBACK (if Daton is needed before action_type is confirmed,
--- use onsite_seven_day_click_purchases as a proxy — will be 0 for this
--- account but keeps the table shape correct):
--- SELECT
---     event_date,
---     SUM(spend)                                                        AS meta_total_spend,
---     SUM(onsite_seven_day_click_purchases)                             AS meta_inapp_purchases,
---     SUM(spend) / NULLIF(SUM(onsite_seven_day_click_purchases), 0)    AS meta_in_app_cpa
--- FROM ads_table
--- WHERE channel = 'facebook-ads'
---   AND event_date BETWEEN @startDate AND @endDate
--- GROUP BY event_date
--- ORDER BY event_date;
