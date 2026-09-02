@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "bigquery": {
+      "command": "/usr/local/bin/mcp-bigquery",
+      "args": [],
+      "env": {
+        "BIGQUERY_PROJECT": "daton-project",
+        "GOOGLE_APPLICATION_CREDENTIALS": "/root/.config/tsm/TSM_service_account.json"
+      }
+    }
+  }
+}
