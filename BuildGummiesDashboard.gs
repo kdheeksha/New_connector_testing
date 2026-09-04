@@ -1,26 +1,33 @@
 /**
- * Builds the "All KPI Sheet Gummies" dashboard tab.
+ * Builds the "All KPI Sheet Gummies" dashboard, matching how the Gels and
+ * Electrolytes tabs are built: the BigQuery EXTRACT lives INSIDE this tab,
+ * anchored at C6, with formatting layered around it.
  *
- * Mirrors the structure of "All KPI Sheet Gels":
- *   row 3  TRIPLE WHALE super-banner        row 6  BigQuery column names (HIDDEN)
- *   row 4  section banners (yellow)         row 7+ data
- *   row 5  column headers (dark green)      freeze: 4 cols x 5 rows
+ *   row 3   TRIPLE WHALE super-banner
+ *   row 4   section banners (yellow)
+ *   row 5   column headers (dark green)
+ *   row 6   <- the extract's own header row (BigQuery names). HIDDEN.
+ *   row 7+  <- extract data. Live and refreshable.
+ *   col B   Day-of-week formula, sits outside the extract
  *
- * Reads from the BigQuery extract tab and maps columns by the hidden row 6 names,
- * so column order in the extract does not matter.
- *
- * Run buildGummiesDashboard() from Extensions > Apps Script.
+ * RUN ORDER
+ *   1. buildGummiesShell()   - creates the tab and everything above row 6
+ *   2. place the extract by hand at 'All KPI Sheet Gummies'!C6  (see log)
+ *   3. formatGummiesData()   - formats the data the extract dropped in
  */
 
 const CFG = {
-  EXTRACT : "All_KPIs_Date_Level_Gummies",   // BigQuery extract tab
-  TARGET  : "All KPI Sheet Gummies",         // tab this script creates
-  HEADER_ROW: 5, MAP_ROW: 6, DATA_ROW: 7, FIRST_COL: 2,
+  TARGET     : "All KPI Sheet Gummies",
+  ANCHOR_A1  : "C6",          // where the extract must be inserted
+  HEADER_ROW : 5,
+  MAP_ROW    : 6,             // = the extract's header row
+  DATA_ROW   : 7,
+  FIRST_COL  : 2,             // column B
   C: { banner:"#FFDC60", header:"#285234", headerText:"#FFFFFF",
-       avg:"#FFDC60", green:"#A5D05A", data:"#FFFFFF", mapRow:"#000000" }
+       avg:"#FFDC60", green:"#A5D05A", data:"#FFFFFF" }
 };
 
-// [label, bigquery_column, number_format, width]  — starts at column B
+// [label, bigquery_column, number_format, width]  — column B onward
 const COLS = [
   ["Day", "", "@", 0],
   ["Date", "date", "M/d/yyyy", 0],
@@ -42,7 +49,7 @@ const COLS = [
   ["YouTube Spend without TOF", "YouTube_Spend_w_o_TOF", "\"$\"#,##0", 28],
   ["YouTube TOF Spend", "YouTube_TOF_Spend", "\"$\"#,##0", 20],
   ["Google S & S Spend", "Google_S_S_Spend", "\"$\"#,##0", 20],
-  ["Google\n(856-088-0398 \u0411\u0410\u0414\u042b (\u041c\u0425\u0418))", "Google_AdSpend", "\"$\"#,##0", 28],
+  ["Google AdSpend", "Google_AdSpend", "\"$\"#,##0", 28],
   ["Google Search Spend", "Google_Search_Spend", "\"$\"#,##0", 22],
   ["Google Shopping Spend", "Google_Shopping_Spend", "\"$\"#,##0", 24],
   ["Google Pmax Spend", "Google_Pmax_Spend", "\"$\"#,##0", 20],
@@ -158,175 +165,102 @@ const SECTIONS = [
   ["RELATIVE METRICS", 114, 117]
 ];
 
-/**
- * Lists every tab, whether it is a live BigQuery connection (DATASOURCE)
- * or a normal sheet, and its size. Run this if the build cannot find the extract.
- */
-function listSheets() {
-  SpreadsheetApp.getActive().getSheets().forEach(sh => {
-    const vals = safeRead_(sh);
-    Logger.log('%s | datasource=%s | readable=%s | a1=%s',
-      sh.getName(), isDataSource_(sh), vals ? vals.length + ' rows' : 'NO',
-      vals && vals[0] ? String(vals[0][0]).slice(0, 60) : '');
-  });
-}
-
-function isDataSource_(sh) {
-  try { return sh.getType() === SpreadsheetApp.SheetType.DATASOURCE; }
-  catch (e) { return false; }
-}
-
-/** Reads a sheet's values, tolerating sheets where getDataRange() is unsupported. */
-function safeRead_(sh) {
-  try { return sh.getDataRange().getValues(); }
-  catch (e) {
-    try { return sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).getValues(); }
-    catch (e2) { return null; }
-  }
-}
-
-/** Finds the row index holding the BigQuery column names (contains store_name). */
-function headerRowOf_(vals) {
-  // Only the first 3 rows: a BigQuery extract puts headers at row 1-2.
-  // Dashboard tabs keep their map row at row 6, so they are excluded here.
-  for (let i = 0; i < Math.min(vals.length, 3); i++) {
-    const row = vals[i].map(v => String(v).trim());
-    if (row.indexOf('store_name') > -1 && row.indexOf('date') > -1) return i;
-  }
-  return -1;
-}
-
-/**
- * Locates the Gummies extract. Tries the configured name first, then any
- * readable sheet carrying the Gummies extract's header signature.
- */
-function findExtract_(ss) {
-  const named = ss.getSheetByName(CFG.EXTRACT);
-  if (named && !isDataSource_(named)) {
-    const v = safeRead_(named);
-    if (v && headerRowOf_(v) > -1) return { sheet: named, vals: v };
-  }
-  const hits = [];
-  ss.getSheets().forEach(sh => {
-    if (isDataSource_(sh)) return;                    // skip live connections
-    if (sh.getName() === CFG.TARGET) return;          // never read our own output
-    const v = safeRead_(sh);
-    if (!v || headerRowOf_(v) < 0) return;
-    const a1 = String(v[0][0] || '');
-    hits.push({ sheet: sh, vals: v, gummies: a1.indexOf('Gummies') > -1 });
-  });
-  const pick = hits.filter(h => h.gummies)[0] || hits[0];
-  if (!pick) {
-    throw new Error('Could not find the Gummies extract. Run listSheets() and ' +
-                    'set CFG.EXTRACT to the extract tab name (not the ' +
-                    'DATASOURCE connection tab).');
-  }
-  return pick;
-}
-
-function buildGummiesDashboard() {
+/* ------------------------------------------------------------------ */
+/* STEP 1                                                              */
+/* ------------------------------------------------------------------ */
+function buildGummiesShell() {
   const ss = SpreadsheetApp.getActive();
-
-  // --- locate + read the extract (row with store_name = header, rows below = data) ---
-  const found   = findExtract_(ss);
-  const raw     = found.vals;
-  const hRow    = headerRowOf_(raw);
-  const srcHead = raw[hRow].map(h => String(h).trim());
-  const srcRows = raw.slice(hRow + 1).filter(r => String(r[0]).trim() !== '');
-  if (!srcRows.length) throw new Error('Extract "' + found.sheet.getName() + '" has no data rows.');
-  const idx = {};
-  srcHead.forEach((h, i) => { if (h) idx[h] = i; });
-  Logger.log('Using extract tab "%s": %s data rows, %s columns',
-             found.sheet.getName(), srcRows.length, srcHead.filter(String).length);
-
-  // --- recreate target tab ---
   const old = ss.getSheetByName(CFG.TARGET);
   if (old) ss.deleteSheet(old);
   const sh = ss.insertSheet(CFG.TARGET, ss.getNumSheets());
 
-  const nCols = COLS.length, lastCol = CFG.FIRST_COL + nCols - 1;
-  const nRows = srcRows.length, lastRow = CFG.DATA_ROW + nRows - 1;
-  if (sh.getMaxColumns() < lastCol) sh.insertColumnsAfter(sh.getMaxColumns(), lastCol - sh.getMaxColumns());
-  if (sh.getMaxRows()    < lastRow) sh.insertRowsAfter(sh.getMaxRows(), lastRow - sh.getMaxRows());
-
-  // --- row 5 headers + row 6 map ---
-  sh.getRange(CFG.HEADER_ROW, CFG.FIRST_COL, 1, nCols).setValues([COLS.map(c => c[0])]);
-  sh.getRange(CFG.MAP_ROW,    CFG.FIRST_COL, 1, nCols).setValues([COLS.map(c => c[1])]);
-
-  // --- section banners (row 4) + Triple Whale super-banner (row 3) ---
-  SECTIONS.forEach(s => {
-    const r = sh.getRange(4, s[1], 1, s[2] - s[1] + 1);
-    r.merge().setValue(s[0]).setBackground(CFG.C.banner)
-     .setFontWeight("bold").setFontSize(14)
-     .setHorizontalAlignment("center").setVerticalAlignment("middle");
-  });
-  sh.getRange(3, 36, 1, 24).merge().setValue("TRIPLE WHALE").setBackground(CFG.C.banner)
-    .setFontWeight("bold").setFontSize(14)
-    .setHorizontalAlignment("center").setVerticalAlignment("middle");
-
-  // --- build data block, mapped by row-6 names ---
-  const out = srcRows.map(row => COLS.map(c => {
-    if (!c[1]) return "";                              // column B (Day) = formula, filled below
-    const i = idx[c[1]];
-    if (i === undefined) return "";                    // column missing from extract
-    let v = row[i];
-    if (c[1] === "date") {                             // "L7 AVG" stays text, real dates become dates
-      const str = String(v).trim();
-      return /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(str + "T00:00:00") : str;
-    }
-    return (v === null || v === "") ? "" : v;
-  }));
-  if (nRows) sh.getRange(CFG.DATA_ROW, CFG.FIRST_COL, nRows, nCols).setValues(out);
-
-  // --- column B: day-of-week (passes "L7 AVG" etc. straight through) ---
-  if (nRows) {
-    sh.getRange(CFG.DATA_ROW, 2, nRows, 1).setFormulas(
-      Array.from({length: nRows}, (_, k) =>
-        ['=IF(C' + (CFG.DATA_ROW + k) + '="","",IFERROR(TEXT(C' + (CFG.DATA_ROW + k) + ',"dddd"),C' + (CFG.DATA_ROW + k) + '))']));
+  const nCols   = COLS.length;
+  const lastCol = CFG.FIRST_COL + nCols - 1;
+  if (sh.getMaxColumns() < lastCol) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), lastCol - sh.getMaxColumns());
   }
 
-  // --- header styling ---
+  // row 5 headers (row 6 is left EMPTY - the extract writes it)
   sh.getRange(CFG.HEADER_ROW, CFG.FIRST_COL, 1, nCols)
+    .setValues([COLS.map(c => c[0])])
     .setBackground(CFG.C.header).setFontColor(CFG.C.headerText)
     .setFontWeight("bold").setFontSize(12)
     .setHorizontalAlignment("center").setVerticalAlignment("middle").setWrap(true);
-  sh.getRange(CFG.MAP_ROW, CFG.FIRST_COL, 1, nCols)
-    .setBackground(CFG.C.mapRow).setFontColor(CFG.C.mapRow).setNumberFormat("@");
 
-  // --- number formats + widths, per column ---
-  COLS.forEach((c, k) => {
-    const col = CFG.FIRST_COL + k;
-    if (nRows) sh.getRange(CFG.DATA_ROW, col, nRows, 1).setNumberFormat(c[2]);
-    sh.setColumnWidth(col, c[3] > 0 ? Math.round(c[3] * 7) : 110);
+  // section banners
+  SECTIONS.forEach(s => {
+    sh.getRange(4, s[1], 1, s[2] - s[1] + 1).merge().setValue(s[0])
+      .setBackground(CFG.C.banner).setFontWeight("bold").setFontSize(14)
+      .setHorizontalAlignment("center").setVerticalAlignment("middle");
   });
+  sh.getRange(3, 36, 1, 24).merge().setValue("TRIPLE WHALE")
+    .setBackground(CFG.C.banner).setFontWeight("bold").setFontSize(14)
+    .setHorizontalAlignment("center").setVerticalAlignment("middle");
 
-  // --- row colours: AVG rows yellow, date rows green ---
-  if (nRows) {
-    const bB = [], bD = [];
-    srcRows.forEach(r => {
-      const isAvg = String(r[0]).indexOf("AVG") > -1;
-      bB.push([isAvg ? CFG.C.avg : CFG.C.green, isAvg ? CFG.C.avg : CFG.C.green]);
-      bD.push([CFG.C.green]);
-    });
-    sh.getRange(CFG.DATA_ROW, 2, nRows, 2).setBackgrounds(bB);   // B:C
-    sh.getRange(CFG.DATA_ROW, 4, nRows, 1).setBackgrounds(bD);   // D
-    sh.getRange(CFG.DATA_ROW, 5, nRows, nCols - 3).setBackground(CFG.C.data);
-    sh.getRange(CFG.DATA_ROW, 2, nRows, 3).setFontWeight("bold");
+  // widths, freeze, heights
+  COLS.forEach((c, k) => sh.setColumnWidth(CFG.FIRST_COL + k, c[3] > 0 ? Math.round(c[3] * 7) : 110));
+  sh.setColumnWidth(1, 30);
+  sh.setFrozenRows(CFG.HEADER_ROW);
+  sh.setFrozenColumns(4);
+  [2, 3, 4].forEach(r => sh.setRowHeight(r, 35));
+  sh.setRowHeight(CFG.HEADER_ROW, 45);
+
+  const msg = 'Shell ready. Now insert the extract at: ' + CFG.TARGET + '!' + CFG.ANCHOR_A1;
+  Logger.log(msg);
+  Logger.log('Go to the All_KPIs_Date_Level_Gummies tab -> Extract -> Existing sheet -> ' +
+             'type  ' + CFG.TARGET + '!' + CFG.ANCHOR_A1 + '  -> Create. Then run formatGummiesData().');
+  ss.toast(msg, "Step 1 of 2 done", 12);
+}
+
+/* ------------------------------------------------------------------ */
+/* STEP 2 - run AFTER the extract has been inserted at C6              */
+/* ------------------------------------------------------------------ */
+function formatGummiesData() {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName(CFG.TARGET);
+  if (!sh) throw new Error('Run buildGummiesShell() first.');
+
+  // verify the extract landed where we expect
+  const mapRow = sh.getRange(CFG.MAP_ROW, 3, 1, 3).getValues()[0].map(v => String(v).trim());
+  if (mapRow[0] !== "date" || mapRow[1] !== "store_name") {
+    throw new Error('No extract found at ' + CFG.ANCHOR_A1 + '. Row ' + CFG.MAP_ROW +
+                    ' reads: ' + JSON.stringify(mapRow) +
+                    '. Insert the extract at ' + CFG.TARGET + '!' + CFG.ANCHOR_A1 + ' first.');
   }
 
-  // --- borders, alignment, freeze, sizes ---
+  const lastRow = sh.getLastRow();
+  const nRows   = lastRow - CFG.DATA_ROW + 1;
+  if (nRows < 1) throw new Error('Extract is present but has no data rows.');
+  const nCols   = COLS.length;
+
+  // column B: day of week ("L7 AVG" etc. pass straight through)
+  sh.getRange(CFG.DATA_ROW, 2, nRows, 1).setFormulas(
+    Array.from({length: nRows}, (_, k) => {
+      const r = CFG.DATA_ROW + k;
+      return ['=IF(C' + r + '="","",IFERROR(TEXT(C' + r + ',"dddd"),C' + r + '))'];
+    }));
+
+  // number formats per column
+  COLS.forEach((c, k) => sh.getRange(CFG.DATA_ROW, CFG.FIRST_COL + k, nRows, 1).setNumberFormat(c[2]));
+
+  // row colours: AVG rows yellow in B:C, everything else green; data area white
+  const keys = sh.getRange(CFG.DATA_ROW, 3, nRows, 1).getDisplayValues();
+  const bc = keys.map(r => {
+    const isAvg = String(r[0]).indexOf("AVG") > -1;
+    const col = isAvg ? CFG.C.avg : CFG.C.green;
+    return [col, col];
+  });
+  sh.getRange(CFG.DATA_ROW, 2, nRows, 2).setBackgrounds(bc);
+  sh.getRange(CFG.DATA_ROW, 4, nRows, 1).setBackground(CFG.C.green);
+  sh.getRange(CFG.DATA_ROW, 5, nRows, nCols - 3).setBackground(CFG.C.data);
+  sh.getRange(CFG.DATA_ROW, 2, nRows, 3).setFontWeight("bold");
+
+  // borders + alignment across header and data
   sh.getRange(CFG.HEADER_ROW, CFG.FIRST_COL, nRows + 2, nCols)
     .setBorder(true, true, true, true, true, true, "#000000", SpreadsheetApp.BorderStyle.SOLID)
     .setHorizontalAlignment("center");
-  sh.setFrozenRows(CFG.HEADER_ROW);
-  sh.setFrozenColumns(4);
+
   sh.hideRows(CFG.MAP_ROW);
-  [2, 3, 4].forEach(r => sh.setRowHeight(r, 35));
-  sh.setRowHeight(CFG.HEADER_ROW, 45);
-  sh.setColumnWidth(1, 30);
-
-  SpreadsheetApp.getActive().toast(nRows + " rows written to " + CFG.TARGET, "Done", 8);
+  Logger.log('Formatted %s data rows.', nRows);
+  ss.toast(nRows + " rows formatted.", "Step 2 of 2 done", 10);
 }
-
-/** Re-pull data only, leaving all formatting intact. */
-function refreshGummiesData() { buildGummiesDashboard(); }
