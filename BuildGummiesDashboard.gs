@@ -158,18 +158,86 @@ const SECTIONS = [
   ["RELATIVE METRICS", 114, 117]
 ];
 
+/**
+ * Lists every tab, whether it is a live BigQuery connection (DATASOURCE)
+ * or a normal sheet, and its size. Run this if the build cannot find the extract.
+ */
+function listSheets() {
+  SpreadsheetApp.getActive().getSheets().forEach(sh => {
+    const vals = safeRead_(sh);
+    Logger.log('%s | datasource=%s | readable=%s | a1=%s',
+      sh.getName(), isDataSource_(sh), vals ? vals.length + ' rows' : 'NO',
+      vals && vals[0] ? String(vals[0][0]).slice(0, 60) : '');
+  });
+}
+
+function isDataSource_(sh) {
+  try { return sh.getType() === SpreadsheetApp.SheetType.DATASOURCE; }
+  catch (e) { return false; }
+}
+
+/** Reads a sheet's values, tolerating sheets where getDataRange() is unsupported. */
+function safeRead_(sh) {
+  try { return sh.getDataRange().getValues(); }
+  catch (e) {
+    try { return sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).getValues(); }
+    catch (e2) { return null; }
+  }
+}
+
+/** Finds the row index holding the BigQuery column names (contains store_name). */
+function headerRowOf_(vals) {
+  // Only the first 3 rows: a BigQuery extract puts headers at row 1-2.
+  // Dashboard tabs keep their map row at row 6, so they are excluded here.
+  for (let i = 0; i < Math.min(vals.length, 3); i++) {
+    const row = vals[i].map(v => String(v).trim());
+    if (row.indexOf('store_name') > -1 && row.indexOf('date') > -1) return i;
+  }
+  return -1;
+}
+
+/**
+ * Locates the Gummies extract. Tries the configured name first, then any
+ * readable sheet carrying the Gummies extract's header signature.
+ */
+function findExtract_(ss) {
+  const named = ss.getSheetByName(CFG.EXTRACT);
+  if (named && !isDataSource_(named)) {
+    const v = safeRead_(named);
+    if (v && headerRowOf_(v) > -1) return { sheet: named, vals: v };
+  }
+  const hits = [];
+  ss.getSheets().forEach(sh => {
+    if (isDataSource_(sh)) return;                    // skip live connections
+    if (sh.getName() === CFG.TARGET) return;          // never read our own output
+    const v = safeRead_(sh);
+    if (!v || headerRowOf_(v) < 0) return;
+    const a1 = String(v[0][0] || '');
+    hits.push({ sheet: sh, vals: v, gummies: a1.indexOf('Gummies') > -1 });
+  });
+  const pick = hits.filter(h => h.gummies)[0] || hits[0];
+  if (!pick) {
+    throw new Error('Could not find the Gummies extract. Run listSheets() and ' +
+                    'set CFG.EXTRACT to the extract tab name (not the ' +
+                    'DATASOURCE connection tab).');
+  }
+  return pick;
+}
+
 function buildGummiesDashboard() {
   const ss = SpreadsheetApp.getActive();
-  const src = ss.getSheetByName(CFG.EXTRACT);
-  if (!src) throw new Error('Extract tab not found: "' + CFG.EXTRACT + '"');
 
-  // --- read extract: row1 = title, row2 = headers, row3+ = data ---
-  const raw  = src.getDataRange().getValues();
-  if (raw.length < 3) throw new Error("Extract has no data rows yet.");
-  const srcHead = raw[1].map(h => String(h).trim());
-  const srcRows = raw.slice(2).filter(r => String(r[0]).trim() !== "");
+  // --- locate + read the extract (row with store_name = header, rows below = data) ---
+  const found   = findExtract_(ss);
+  const raw     = found.vals;
+  const hRow    = headerRowOf_(raw);
+  const srcHead = raw[hRow].map(h => String(h).trim());
+  const srcRows = raw.slice(hRow + 1).filter(r => String(r[0]).trim() !== '');
+  if (!srcRows.length) throw new Error('Extract "' + found.sheet.getName() + '" has no data rows.');
   const idx = {};
   srcHead.forEach((h, i) => { if (h) idx[h] = i; });
+  Logger.log('Using extract tab "%s": %s data rows, %s columns',
+             found.sheet.getName(), srcRows.length, srcHead.filter(String).length);
 
   // --- recreate target tab ---
   const old = ss.getSheetByName(CFG.TARGET);
