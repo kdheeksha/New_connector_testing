@@ -42,7 +42,7 @@ const COLS = [
   ["YouTube Spend without TOF", "YouTube_Spend_w_o_TOF", "\"$\"#,##0", 28],
   ["YouTube TOF Spend", "YouTube_TOF_Spend", "\"$\"#,##0", 20],
   ["Google S & S Spend", "Google_S_S_Spend", "\"$\"#,##0", 20],
-  ["Google AdSpend", "Google_AdSpend", "\"$\"#,##0", 28],
+  ["Google\n(856-088-0398 \u0411\u0410\u0414\u042b (\u041c\u0425\u0418))", "Google_AdSpend", "\"$\"#,##0", 28],
   ["Google Search Spend", "Google_Search_Spend", "\"$\"#,##0", 22],
   ["Google Shopping Spend", "Google_Shopping_Spend", "\"$\"#,##0", 24],
   ["Google Pmax Spend", "Google_Pmax_Spend", "\"$\"#,##0", 20],
