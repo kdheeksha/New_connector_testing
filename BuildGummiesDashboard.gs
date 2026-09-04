@@ -264,3 +264,40 @@ function formatGummiesData() {
   Logger.log('Formatted %s data rows.', nRows);
   ss.toast(nRows + " rows formatted.", "Step 2 of 2 done", 10);
 }
+
+/* ------------------------------------------------------------------ */
+/* STEP 3 - conditional formatting (the orange heat map)               */
+/* ------------------------------------------------------------------ */
+/**
+ * Recreates the per-column colour scales used on the Gels / Electrolytes tabs.
+ *
+ * Spec read from the existing tabs: one colour-scale rule per metric column,
+ * spanning the whole column, white (#FFFFFF) at the minimum to orange
+ * (#FF790B) at the maximum. Scales are per-column so each metric is shaded
+ * on its own range rather than against unrelated metrics.
+ *
+ * Colour scales only apply to numeric cells, so the header rows are untouched.
+ */
+function applyGummiesColorScales() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(CFG.TARGET);
+  if (!sh) throw new Error('Run buildGummiesShell() first.');
+
+  const MIN_COLOR = "#FFFFFF";
+  const MAX_COLOR = "#FF790B";
+  const FIRST = 5;                      // column E - first metric column
+  const LAST  = CFG.FIRST_COL + COLS.length - 1;   // column DM
+  const rows  = sh.getMaxRows();
+
+  const rules = [];
+  for (let col = FIRST; col <= LAST; col++) {
+    rules.push(SpreadsheetApp.newConditionalFormatRule()
+      .setGradientMinpoint(MIN_COLOR)
+      .setGradientMaxpoint(MAX_COLOR)
+      .setRanges([sh.getRange(1, col, rows, 1)])
+      .build());
+  }
+  sh.setConditionalFormatRules(rules);
+
+  Logger.log('Applied %s colour-scale rules (cols %s..%s).', rules.length, FIRST, LAST);
+  SpreadsheetApp.getActive().toast(rules.length + " colour scales applied.", "Step 3 of 3 done", 10);
+}
