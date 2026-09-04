@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "bigquery-tsm": {
+      "command": "uvx",
+      "args": [
+        "--python",
+        "3.13",
+        "mcp-server-bigquery",
+        "--project",
+        "daton-project",
+        "--key-file",
+        "/path/to/service_account_TSM.json"
+      ]
+    }
+  }
+}
