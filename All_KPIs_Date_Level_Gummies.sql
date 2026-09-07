@@ -1,4 +1,12 @@
 CREATE OR REPLACE VIEW `daton-project.trueseamoss_5363_prod_presentation_views.All_KPIs_Date_Level_Gummies` AS
+-- NOTE: ATC_to_PU_Perc and IC_to_PU_Perc are deliberately NULL on this view.
+-- They divide product-scoped orders (DailySalesTracker, by SKU) by page-scoped
+-- sessions (DailyShopifyProductCategorySessionsTracker, by landing page).
+-- Gummies is bought mainly as a cross-sell from other product pages, so gummies
+-- orders (2,162 in L30) far exceed add-to-carts on gummies pages (933),
+-- producing impossible rates above 100%. Gels and Electrolytes are hero products
+-- whose traffic and orders roughly coincide, so the same formula stays plausible
+-- there. Restore these once order-level landing-page attribution exists.
 WITH
   DailySalesTracker AS (
     WITH
@@ -4126,14 +4134,12 @@ avg(
       -- safe_divide(Shopify_AdSpend, Sessions_with_cart_additions) as Cost_per_ATC,
       safe_divide(Sessions_with_cart_additions, Online_store_visitors)
         AS ATC_Perc,
-      safe_divide(new_shopify_orders, Sessions_with_cart_additions)
-        AS ATC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS ATC_to_PU_Perc,
       Sessions_that_reached_checkout AS Initiated_Check_Out,
       Sessions_that_completed_checkout AS Completed_Check_Out,
 
       -- safe_divide(Shopify_AdSpend, Sessions_that_reached_checkout) as Cost_per_Initiated_Check_Out,
-      safe_divide(new_shopify_orders, Sessions_that_reached_checkout)
-        AS IC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS IC_to_PU_Perc,
       safe_divide(Sessions_that_reached_checkout, Sessions_with_cart_additions)
         AS ATC_to_IC_Perc,
       active_subscribers_recharge AS Active_Subscribers,
@@ -4297,15 +4303,12 @@ avg(
       safe_divide(
         pa.Sessions_with_cart_additions_L7, pa.Online_store_visitors_L7)
         AS ATC_Perc,
-      safe_divide(pa.new_shopify_orders_L7, pa.Sessions_with_cart_additions_L7)
-        AS ATC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS ATC_to_PU_Perc,
       pa.Sessions_that_reached_checkout_L7 AS Initiated_Check_Out,
       pa.Sessions_that_completed_checkout_L7 AS Completed_Check_Out,
 
       -- safe_divide(pa.Shopify_AdSpend_L7, pa.Sessions_that_reached_checkout_L7) as Cost_per_Initiated_Check_Out,
-      safe_divide(
-        pa.new_shopify_orders_L7, pa.Sessions_that_reached_checkout_L7)
-        AS IC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS IC_to_PU_Perc,
       safe_divide(
         pa.Sessions_that_reached_checkout_L7,
         
@@ -4479,16 +4482,12 @@ avg(
       safe_divide(
         pa.Sessions_with_cart_additions_L14, pa.Online_store_visitors_L14)
         AS ATC_Perc,
-      safe_divide(
-        pa.new_shopify_orders_L14, pa.Sessions_with_cart_additions_L14)
-        AS ATC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS ATC_to_PU_Perc,
       pa.Sessions_that_reached_checkout_L14 AS Initiated_Check_Out,
       pa.Sessions_that_completed_checkout_L14 AS Completed_Check_Out,
 
       -- safe_divide(pa.Shopify_AdSpend_L14, pa.Sessions_that_reached_checkout_L14) as Cost_per_Initiated_Check_Out,
-      safe_divide(
-        pa.new_shopify_orders_L14, pa.Sessions_that_reached_checkout_L14)
-        AS IC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS IC_to_PU_Perc,
       safe_divide(
         pa.Sessions_that_reached_checkout_L14,
         pa.Sessions_with_cart_additions_L14) AS ATC_to_IC_Perc,
@@ -4662,16 +4661,12 @@ avg(
       safe_divide(
         pa.Sessions_with_cart_additions_L30, pa.Online_store_visitors_L30)
         AS ATC_Perc,
-      safe_divide(
-        pa.new_shopify_orders_L30, pa.Sessions_with_cart_additions_L30)
-        AS ATC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS ATC_to_PU_Perc,
       pa.Sessions_that_reached_checkout_L30 AS Initiated_Check_Out,
       pa.Sessions_that_completed_checkout_L30 AS Completed_Check_Out,
 
       -- safe_divide(pa.Shopify_AdSpend_L30, pa.Sessions_that_reached_checkout_L30) as Cost_per_Initiated_Check_Out,
-      safe_divide(
-        pa.new_shopify_orders_L30, pa.Sessions_that_reached_checkout_L30)
-        AS IC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS IC_to_PU_Perc,
       safe_divide(
         pa.Sessions_that_reached_checkout_L30,
         pa.Sessions_with_cart_additions_L30) AS ATC_to_IC_Perc,
@@ -4845,16 +4840,12 @@ avg(
       safe_divide(
         pa.Sessions_with_cart_additions_MTD, pa.Online_store_visitors_MTD)
         AS ATC_Perc,
-      safe_divide(
-        pa.new_shopify_orders_MTD, pa.Sessions_with_cart_additions_MTD)
-        AS ATC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS ATC_to_PU_Perc,
       pa.Sessions_that_reached_checkout_MTD AS Initiated_Check_Out,
       pa.Sessions_that_completed_checkout_MTD AS Completed_Check_Out,
 
       -- safe_divide(pa.Shopify_AdSpend_MTD, pa.Sessions_that_reached_checkout_MTD) as Cost_per_Initiated_Check_Out,
-      safe_divide(
-        pa.new_shopify_orders_MTD, pa.Sessions_that_reached_checkout_MTD)
-        AS IC_to_PU_Perc,
+      CAST(NULL AS FLOAT64) AS IC_to_PU_Perc,
       safe_divide(
         pa.Sessions_that_reached_checkout_MTD,
 
