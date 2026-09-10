@@ -213,7 +213,9 @@ const doc = new Document({
 
         h1("Notes"),
         bullet(
-          "Launch dates are derived from first observed sale; TrueSeaMoss keeps no launch calendar."
+          "Launch dates are measured from first observed sale and validated against Shopify's published_at field. " +
+          "Cranberry matches exactly; Peach/Pear was published one day before its first sale; Raspberry/Watermelon " +
+          "was published 11 June 2026 and sat live for four days before its first order."
         ),
         bullet(
           "Cranberry's figures begin in December 2025 and Peach/Pear's in March 2026 because those are their launch " +

@@ -204,9 +204,10 @@ const doc = new Document({
         // ---------- Section 1 ----------
         h1("1.  The three launches, compared at equal age"),
         para(
-          "TrueSeaMoss keeps no launch calendar, so each launch date is derived from the first observed sale of " +
-          "that flavour. Indexing every launch to its own day zero allows launches from different calendar months " +
-          "to be compared on equal footing."
+          "TrueSeaMoss keeps no launch calendar, so each launch date is taken from the first observed sale of that " +
+          "flavour and then checked against the publish date Shopify records for the product. The two agree to " +
+          "within four days on all three launches. Indexing every launch to its own day zero allows launches from " +
+          "different calendar months to be compared on equal footing."
         ),
         table(
           [2760, 2200, 2200, 2200],
@@ -409,8 +410,12 @@ const doc = new Document({
         // ---------- Section 6 ----------
         h1("6.  Method notes and limitations"),
         bullet(
-          "Launch dates are first-sale proxies. They should be reconciled against Shopify product publish dates; a " +
-          "soft launch ahead of promotion would shift every T+30 figure."
+          "Launch dates are measured from first observed sale and have been validated against Shopify's own " +
+          "published_at field. Cranberry matches exactly (published 9 December 2025). Peach/Pear was published " +
+          "19 March 2026, one day before its first sale. Raspberry/Watermelon was published 11 June 2026 and " +
+          "recorded no sales for four days, so its listing preceded commercial launch. First-sale dates are used " +
+          "throughout because they mark when a flavour began trading; the largest deviation is four days and it " +
+          "changes no figure materially."
         ),
         bullet(
           "All figures are revenue-based. Margin and contribution KPIs are Version 2 deliverables pending COGS from " +

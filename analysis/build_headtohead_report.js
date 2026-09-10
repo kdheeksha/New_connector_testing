@@ -24,13 +24,15 @@ const doc = new Document({
         h1("A note on what could and could not be compared"),
         para(
           "The intent was to set new gel flavours against new electrolyte flavours. That comparison cannot be made, " +
-          "because there is no new electrolyte flavour. All four electrolyte flavours went live on Shopify on the " +
-          "same day, 4 July 2025, as a single category launch, and are now 433 days old. Nothing has launched in " +
-          "electrolytes since."
+          "because there is no new electrolyte flavour. All four electrolyte flavours were published to the Shopify " +
+          "storefront on the same day, 19 June 2025, as a single category launch. Nothing has launched in " +
+          "electrolytes in the fourteen months since."
         ),
         para(
-          "This is a real launch date rather than an artefact of the data — Shopify history in this model runs back " +
-          "to September 2022, and electrolytes ramp from zero in July 2025."
+          "This is a genuine launch rather than an artefact of the data — Shopify history in this model runs back to " +
+          "September 2022, and electrolytes ramp from zero. It is worth noting that the four flavours were live for " +
+          "fifteen days before recording a single sale, first selling on 4 July 2025. Every window in this report is " +
+          "measured from first sale rather than publish date, so it captures trading life rather than shelf life."
         ),
         para(
           "So the comparison here is between the two newest gel flavours and the four established electrolyte " +
@@ -172,8 +174,13 @@ const doc = new Document({
 
         h1("Notes"),
         bullet(
-          "All four electrolyte flavours share a launch date of 4 July 2025, so their equal-age windows are identical " +
-          "and their comparison with each other is exact."
+          "All four electrolyte flavours share a publish date of 19 June 2025 and a first-sale date of 4 July 2025, " +
+          "so their equal-age windows are identical and their comparison with each other is exact."
+        ),
+        bullet(
+          "Launch dates are measured from first sale but have been validated against Shopify's own published_at " +
+          "field. Cranberry matches exactly; Peach/Pear published one day earlier than its first sale; " +
+          "Raspberry/Watermelon four days earlier; the electrolyte range fifteen days earlier."
         ),
         bullet(
           "87 days is the age of the newest gel launch and therefore the widest window available for a complete " +
