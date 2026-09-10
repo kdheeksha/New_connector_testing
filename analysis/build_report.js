@@ -191,10 +191,14 @@ const doc = new Document({
           "than comparable customers who did not adopt."
         ),
         para(
-          "The practical implication is that launches should be budgeted and judged as customer-acquisition " +
-          "campaigns, measured on new-to-brand volume, acquisition cost and repeat rate, rather than as portfolio " +
-          "decisions about which flavour takes share from which.",
-          { bold: false }
+          "Every launch paid back on a revenue basis inside 60 days, returning 1.55 to 1.91 times the blended " +
+          "cost of acquisition prevailing in its own launch month. Against the stricter cost per new paid customer, " +
+          "the margin is thinner, at 1.11 to 1.39 times."
+        ),
+        para(
+          "Most consequentially: once observation windows are equalised, the three launches are almost " +
+          "indistinguishable in unit economics, despite differing sevenfold in size. Flavour choice did not drive " +
+          "launch outcomes. Reach did."
         ),
 
         // ---------- Section 1 ----------
@@ -307,8 +311,7 @@ const doc = new Document({
           "gives the result its credibility: the effect is far too large to be explained by engaged customers alone."
         ),
 
-        // ---------- Section 4 ----------
-        h1("4.  Verdict"),
+        h2("Result"),
         para(
           "Subtracting the selection baseline from each launch's measured lift gives the adjusted incremental figure below."
         ),
@@ -328,23 +331,79 @@ const doc = new Document({
           "the limits of what this method can detect."
         ),
 
+        // ---------- Section 4 ----------
+        h1("4.  Do launches pay back?"),
+        para(
+          "Proving a launch is incremental does not establish that it was worth doing. To test that, each launch is " +
+          "measured on what the customers it acquired went on to spend — on anything, not only the launch flavour — " +
+          "against the cost of acquiring a customer in that same month, taken from TrueSeaMoss's own monthly KPI view."
+        ),
+        para(
+          "Windows must be equalised for this comparison to mean anything. Raspberry/Watermelon is recent enough that " +
+          "its later-acquired customers have only weeks of history, which drags its averages down for reasons that " +
+          "have nothing to do with the launch. Every launch below is therefore measured identically: customers " +
+          "acquired in the first 28 days, each observed for 60 days."
+        ),
+        table(
+          [2160, 1200, 1240, 1240, 1000, 1280, 1240],
+          ["Launch", "Acquired", "Rev / cust", "2nd order", "Blended CAC", "× CAC", "× NCPA"],
+          [
+            ["Cranberry", "1,187", "$108.83", "67.7%", "$57.22", "1.90×", "1.24×"],
+            ["Peach/Pear", "2,391", "$104.67", "70.7%", "$67.66", "1.55×", "1.11×"],
+            ["Raspberry/Watermelon", "8,586", "$104.87", "68.1%", "$55.03", "1.91×", "1.39×"],
+          ]
+        ),
+        caption(
+          "Blended CAC and DTC NCPA are period-matched to each launch month, from All_KPIs_Monthly_Performance (Gels, United States)."
+        ),
+        para(
+          "All three clear blended acquisition cost inside 60 days. Against DTC NCPA — the stricter measure, and " +
+          "arguably the right one for launches, since these are new paid customers — the margin narrows to between " +
+          "1.11 and 1.39 times. These are revenue figures, not margin, so true profit payback takes longer than 60 " +
+          "days and cannot be settled until COGS lands with the Version 2 contribution-margin work."
+        ),
+
         // ---------- Section 5 ----------
-        h1("5.  What this means"),
+        h1("5.  Conclusions"),
+        h2("Launches grow the business; they do not move demand around"),
+        para(
+          "Between 80% and 93% of launch revenue comes from customers who had never bought before, and the small " +
+          "pre-existing slice is additive. Cannibalisation did not occur in any of the three launches and should not " +
+          "be treated as a gating risk in launch decisions."
+        ),
+        h2("Flavour choice does not drive launch economics — reach does"),
+        para(
+          "This is the most actionable finding. On equalised windows the three launches are almost identical per " +
+          "customer: $104.67 to $108.83 in 60-day revenue, and a second-order rate between 67.7% and 70.7%. A spread " +
+          "of under 4% across three different flavours launched in three different quarters. Yet Raspberry/Watermelon " +
+          "acquired 7.2 times as many customers as Cranberry."
+        ),
+        para(
+          "The flavour, in other words, did not determine the return. The scale of the launch did. Effort spent " +
+          "deliberating which flavour to launch next is better spent on how much reach the launch is given."
+        ),
+        h2("A new flavour acts as a re-engagement trigger, not merely a product"),
+        para(
+          "In all three launches the adjusted incremental lift exceeded what adopters actually spent on the new " +
+          "flavour itself. Existing customers who tried it did not only add it to their basket; they raised their " +
+          "overall spend beyond it. A launch appears to reactivate the existing base as well as recruit a new one."
+        ),
+        h2("Recommendation"),
         bullet(
-          "Judge launches as acquisition campaigns. The metrics that matter are new-to-brand customers, cost per " +
-          "acquisition and repeat rate — not share shift between flavours."
+          "Treat flavour launches as a standing acquisition channel with predictable unit economics, not as " +
+          "individual portfolio bets."
         ),
         bullet(
-          "Cannibalisation is not the risk it is usually assumed to be. No launch took measurable share from the " +
-          "existing range, so portfolio-conflict concerns should not gate launch decisions."
+          "Shift the decision from which flavour to launch toward how much media and merchandising support each " +
+          "launch receives, since that is the variable the data shows moving outcomes."
         ),
         bullet(
-          "Because repeat rates are near-identical across launches, the lever worth pulling is launch reach, not " +
-          "flavour selection. A bigger launch produces more customers of the same quality."
+          "Grade future launches against Raspberry/Watermelon's curve — $260,113 at T+30 and $665,700 at T+60 — " +
+          "rather than against absolute revenue, which flatters older launches."
         ),
         bullet(
-          "Raspberry/Watermelon is the benchmark to beat. Future launches should be graded against its T+30, T+60 " +
-          "and T+90 curve rather than against absolute revenue."
+          "Revisit the payback conclusion once Version 2 COGS is available. The revenue-basis result is positive, " +
+          "but the margin against NCPA is thin enough that the profit answer could differ."
         ),
 
         // ---------- Section 6 ----------
@@ -367,6 +426,15 @@ const doc = new Document({
         bullet(
           "Scope is Shopify and the United States only. The August 2026 Sparkling Drink launch is excluded because " +
           "it sells on TikTok and Amazon only, with no Shopify presence."
+        ),
+        bullet(
+          "Payback in Section 4 counts everything an acquired customer spent in their first 60 days, not only the " +
+          "launch flavour, since the launch is credited with the customer rather than the single product."
+        ),
+        bullet(
+          "Observation windows are equalised in Section 4 but not in Section 1, where T+30/60/90 are cumulative by " +
+          "construction. Comparing raw per-customer averages across launches of different ages without equalising " +
+          "understates the most recent launch substantially."
         ),
         bullet(
           "Established flavours appear in this analysis solely as placebo controls. They are not the subject of the study."
