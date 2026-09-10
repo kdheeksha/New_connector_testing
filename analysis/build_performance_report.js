@@ -10,15 +10,39 @@ const doc = new Document({
       properties: pageProps,
       children: [
         ...titleBlock({
-          eyebrow: "TRUESEAMOSS  ·  NEW LAUNCH PERFORMANCE",
-          title: "How the three new gel flavours are trading",
+          eyebrow: "TRUESEAMOSS  ·  RECENT GEL LAUNCHES",
+          title: "How the recent gel launches are trading",
           dek: "Volume, order value, subscription mix and customer mix since launch",
           meta: [
             ["Scope", "Shopify, United States. Data through 10 September 2026."],
-            ["Flavours", "Gel Cranberry (9 Dec 2025), Gel Peach/Pear (20 Mar 2026), Gel Raspberry/Watermelon (15 Jun 2026)."],
+            ["Subject", "Gel Raspberry/Watermelon, launched 15 June 2026 — the only recent gel launch on Shopify."],
+            ["Benchmarks", "Gel Peach/Pear (20 Mar 2026) and Gel Cranberry (9 Dec 2025), the two previous gel launches."],
             ["Source", "daton-project · sku_cohort_base."],
           ],
         }),
+
+        h1("Which launches this covers"),
+        para(
+          "Only one of these three flavours is genuinely new. Raspberry/Watermelon is 87 days old at the time of " +
+          "writing. Peach/Pear is approaching six months and Cranberry is nine months old — both are established " +
+          "products rather than launches, and they appear here because a single launch cannot be judged in isolation. " +
+          "They provide the comparison that makes Raspberry/Watermelon's numbers meaningful."
+        ),
+        table(
+          [2600, 1800, 1300, 2000, 1660],
+          ["Flavour", "Launched", "Age", "Role in this report", "Gross to date"],
+          [
+            ["Raspberry/Watermelon", "15 Jun 2026", "87 days", "Subject", "$1,110,054"],
+            ["Peach/Pear", "20 Mar 2026", "174 days", "Benchmark", "$1,650,115"],
+            ["Cranberry", "9 Dec 2025", "275 days", "Benchmark", "$481,856"],
+          ]
+        ),
+        para(
+          "No gel flavour has launched on Shopify since 15 June 2026. The only other Shopify first-sales in the past " +
+          "twelve months are immaterial — a Gift Bergamot at $335 and a Gummies Ashwagandha at $3,605. The genuinely " +
+          "newest products in the business are the Sparkling Drink flavours launched 14–15 August 2026, but those sell " +
+          "on TikTok and Amazon only and have no Shopify presence, so they fall outside this report's scope."
+        ),
 
         h1("At a glance"),
         para(
@@ -190,6 +214,10 @@ const doc = new Document({
         h1("Notes"),
         bullet(
           "Launch dates are derived from first observed sale; TrueSeaMoss keeps no launch calendar."
+        ),
+        bullet(
+          "Cranberry's figures begin in December 2025 and Peach/Pear's in March 2026 because those are their launch " +
+          "months. Only Raspberry/Watermelon is a recent launch; the other two are included as benchmarks."
         ),
         bullet(
           "September 2026 figures cover 1–10 September only and are not comparable to full months."
