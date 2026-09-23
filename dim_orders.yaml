@@ -1,0 +1,112 @@
+
+models:
+  - name: dim_orders
+    description: "Order-grain dimension table in the Main layer, unifying order details across all e-commerce platforms enabled for equipfoods. Includes order attributes, payment method details, and discount/product basket summaries, with SCD Type 2 tracking columns (effective_start_date/effective_end_date). Grain is one row per order_id (verified 1:1 — no active duplication despite SCD columns)."
+    columns:
+      - name: order_key
+        data_type: string
+        description: "Surrogate key for the order, generated from order_id and platform_name to ensure uniqueness across platforms."
+
+      - name: customer_key
+        data_type: string
+        description: "Foreign key to dim_customer table, linking to the customer who placed the order."
+
+      - name: ship_address_key
+        data_type: string
+        description: "Foreign key to dim_address table, linking to the shipping address."
+
+      - name: bill_address_key
+        data_type: string
+        description: "Foreign key to dim_address table, linking to the billing address."
+
+      - name: platform_name
+        data_type: string
+        description: "The name of the e-commerce platform where the order was placed."
+
+      - name: order_id
+        data_type: string
+        description: "The unique identifier for the order from the e-commerce platform. Joins 1:1 to OrderLinesMaster.order_id / LineItemMaster.order_id."
+
+      - name: type
+        data_type: string
+        description: "The type of order (e.g., regular, subscription, wholesale)."
+
+      - name: order_date
+        data_type: date
+        description: "The date when the order was placed."
+
+      - name: order_datetime
+        data_type: datetime
+        description: "The timestamp when the order was placed."
+
+      - name: payment_mode
+        data_type: string
+        description: "The payment method used for the order (e.g., credit card, PayPal, bank transfer)."
+
+      - name: payment_gateway
+        data_type: string
+        description: "The payment gateway that processed the order (e.g., shopify_payments). Populated for Shopify; null for other platforms."
+
+      - name: digital_wallet
+        data_type: string
+        description: "The digital wallet or payment method used (e.g., visa, apple_pay). Populated for Shopify from transaction payment details; null for other platforms."
+
+      - name: credit_card_type
+        data_type: string
+        description: "The credit card type used for the payment (e.g., Visa, Mastercard). Populated for Shopify from transaction payment details; null for other platforms."
+
+      - name: order_channel
+        data_type: string
+        description: "The channel through which the order was placed (e.g., online, mobile, in-store)."
+
+      - name: note
+        data_type: string
+        description: "Additional notes or comments about the order. CAUTION: rare but real free-text PII observed (customer names, personal/business emails) — do not select this column when using dim_orders as a PII-free join source."
+
+      - name: tags
+        data_type: string
+        description: "Tags associated with the order for categorization and filtering."
+
+      - name: order_name
+        data_type: string
+        description: "The display name or reference for the order."
+
+      - name: discount_codes
+        data_type: string
+        description: "Discount codes or coupons applied to the order (STRING_AGG of all codes on the order). Order-level attribute — matches OrderLinesMaster/CustomerPurchaseHistory discount_codes values exactly (spot-checked). Safe, PII-free column to join into LineItemMaster via order_id."
+
+      - name: product_basket
+        data_type: string
+        description: "The complete list of products in the order."
+
+      - name: category_basket
+        data_type: string
+        description: "The complete list of product categories in the order."
+
+      - name: rating
+        data_type: int64
+        description: "The customer rating given to the order (typically 1-5 scale)."
+
+      - name: feedback_type
+        data_type: string
+        description: "The categorized feedback type based on the rating (e.g., Positive, Neutral, Negative)."
+
+      - name: comments
+        data_type: string
+        description: "Customer comments or feedback about the order. CAUTION: rare but real free-text PII observed (full name + city/state) — do not select this column when using dim_orders as a PII-free join source."
+
+      - name: effective_start_date
+        data_type: date
+        description: "The date when this order record became effective (SCD Type 2)."
+
+      - name: effective_end_date
+        data_type: date
+        description: "The date when this order record became inactive (SCD Type 2). Null for current records."
+
+      - name: last_updated
+        data_type: timestamp
+        description: "The timestamp when this order record was last updated."
+
+      - name: _run_id
+        data_type: string
+        description: "The dbt run ID that created or last updated this record."
