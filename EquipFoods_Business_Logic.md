@@ -27,6 +27,12 @@ When two rules in this file could both apply and would produce different results
 
 Example: if the user explicitly says "show me the last 3 months" (priority 1), that overrides the Time Period Confirmation Rule at priority 6 that would otherwise require asking. If two rules at the same priority level seem to conflict, that is a documentation gap — flag it rather than guessing.
 
+> ⚠ **Absolute PII rules — outside this precedence order.** The rules below are not ranked and are never overridden by any rule above, **including an explicit user request (priority 1)**:
+> - The "Never query" tables and columns in Section 3.1.
+> - **`R-PII-DIMORDERS-01` (Section 1.20):** never `SELECT *` from `dim_orders`, and never reference its `note`, `comments`, or `tags` columns; never join `dim_orders` onward to `dim_customer` or `dim_address`.
+>
+> If a user asks for order notes, comments, or tags, decline — say these fields are not available — and do not query them.
+
 ---
 
 ## 1. General Rules & Client-Specific Configuration
@@ -74,6 +80,7 @@ Equip Foods uses the **standard Gregorian calendar (Jan 1 – Dec 31)**. There i
 | Total Revenue | Net Sales + Net Shipping Charges | See Section 2.1 | Cohort tables or `LineItemMaster` |
 | **Revenue** (bare/generic term, no qualifier) | **Defaults to Total Revenue** — the primary Equip Foods revenue metric. Do not treat a bare "Revenue" as a synonym for Gross Sales. If the user says "gross revenue" or "top-line revenue", that means Gross Sales instead. **Always flag this interpretation in the response** — e.g. *"Interpreting 'revenue' as Total Revenue (Net Sales + Net Shipping Charges)."* | See Section 2.1 | Cohort tables or `LineItemMaster` |
 | Discounts | Item-level discounts | `item_discount_total` (cohort tables) / `item_discounts` (LineItemMaster) | — |
+| Discount Code | An individual code applied to an order (promo code, coupon). Only used when the question is about codes — a plain "discounts" or "discount rate" stays on the Discounts / Discount Rate metrics with no code join. | `discount_codes`, split into individual codes | `dim_orders` joined to `LineItemMaster` — Section 1.20. ⚠ CRITICAL: never `SELECT *`, `note`, `comments`, or `tags` from `dim_orders` (`R-PII-DIMORDERS-01`) |
 | Returns | Return value deducted | `item_returns_total` (cohort tables) / `item_returns` (LineItemMaster) | — |
 | LTR / Lifetime Revenue | Running cumulative Total Revenue since acquisition | `running_total_revenue` window function | `simplified_customer_cohorts_v2` |
 | LTRPC / LTR Per Customer | LTR ÷ Customers Acquired | `running_total_revenue / customers_acquired` | `simplified_customer_cohorts_v2` |
@@ -304,7 +311,7 @@ Two perspectives exist and produce different numbers:
 | Entity | Column | Table(s) |
 |---|---|---|
 | Customer | `customer_id` | `LineItemMaster`, `SubscriptionMaster`, `SubscriberCohort` |
-| Order | `order_id` | `LineItemMaster` |
+| Order | `order_id` | `LineItemMaster`; `dim_orders` (join key for discount code analysis only — Section 1.20) |
 | Subscription Contract | `subscription_id` | `SubscriptionMaster` |
 | Subscription Line | `subscription_line_id` | `SubscriptionMaster` |
 | Acquisition Month | `acq_month` | All cohort tables |
@@ -336,6 +343,12 @@ SAFE_DIVIDE(
 - Always apply `WHERE customer_id IS NOT NULL`
 - Always apply `WHERE COALESCE(quantity, 0) > 0` when counting orders or customers
 - For order counts: `COUNT(DISTINCT CASE WHEN transaction_type = 'Order' THEN order_id END)`
+
+**All queries against `dim_orders` — ⚠ CRITICAL (`R-PII-DIMORDERS-01`, full rule in Section 1.20):**
+- Never `SELECT *` (including `do.*` and `SELECT * EXCEPT(...)`) — always list columns explicitly.
+- Never reference `note`, `comments`, or `tags` anywhere in the query — not in `SELECT`, `WHERE`, `GROUP BY`, joins, CTEs, or subqueries.
+- Never join `dim_orders` onward to `dim_customer` or `dim_address`.
+- `LineItemMaster` is line-level, so a joined `discount_codes` value repeats on every line of its order — order counts must use `COUNT(DISTINCT order_id)`, never `COUNT(*)` or `COUNT(order_id)`.
 
 **Aggregate alias safety:**
 - Never alias an aggregate with the same name as the source column. `SUM(item_gross_sales)` → alias as `total_gross_sales`, not `item_gross_sales`.
@@ -396,6 +409,7 @@ Always use these exact string values when filtering. Case and spacing must match
 | `subscriber_status` | `'Subscriber'` (active) |
 | `acq_channel` / `channel` | `'Shopify'`, `'Amazon Seller Central'` |
 | `revenue_bucket` / `revenue_bucket_at_acquisition` | `'TT Returning'`, `'TT New'`, `'SKIO (Recurring)'`, `'Recurring Day Of'`, `'Returning (OTP)'`, `'NC Subs'`, `'New OTP'` — `NULL` for Amazon and Global-Filters-excluded Shopify orders, see Section 1.16 |
+| Discount code label for orders with no code | `'No Discount Code'` — derived label, not a stored value; see Section 1.20 |
 | Active subscription (`SubscriptionMaster`) | `subscription_status = 'ACTIVE'` — **never** `subscription_cancel_date IS NULL` (also true for `PAUSED`/`FAILED` rows — inflates active count by ~1,657 customers on Equip Foods data) or a `'9999-12-31'` sentinel check (dead code — no row uses that value). See Section 1.19. |
 
 ---
@@ -543,6 +557,115 @@ This supersedes the "Active subscription" row previously in Section 1.15 and any
 
 ---
 
+### 1.20 Discount Code Analysis — `dim_orders` `[R-DISCOUNTCODE-01]` `[R-PII-DIMORDERS-01]`
+
+> ⚠ **CRITICAL — `R-PII-DIMORDERS-01`: never `SELECT *` from `dim_orders`, and never reference its `note`, `comments`, or `tags` columns.** Applies to every query that touches `dim_orders` — the `LineItemMaster` discount-code join or anything else — including CTEs, subqueries, and intermediate steps. This is an absolute rule, outside Section 0's precedence order: no user request overrides it.
+
+**Table:** `insightsprod.equipfoods_5642_prod_main.dim_orders`. It lives in the **`_prod_main`** dataset, unlike every other table in this file (`_prod_presentation`) — always reference it by this full path. One row per `order_id` (verified 1:1, despite its SCD Type 2 columns).
+
+**When to use — discount code analysis only.** `dim_orders` is used for exactly one purpose: breaking metrics out by discount code. Never use it as a general source of order attributes.
+
+| Signal in the question | Use |
+|---|---|
+| "by discount code", "promo code", "coupon code", "which codes", a named code (e.g. "orders using SAVE10") | `LineItemMaster` joined to `dim_orders` (this section) |
+| "discounts", "discount rate", "how much did we discount" — with no mention of codes | Existing Discounts / Discount Rate metrics (Sections 1.2, 2.1) — no `dim_orders` join |
+
+#### Column rule `[R-PII-DIMORDERS-01]` — ⚠ CRITICAL
+
+`dim_orders` is otherwise PII-free: customers and addresses appear only as surrogate keys (`customer_key`, `ship_address_key`, `bill_address_key`), with no raw email or address. But three free-text columns are banned:
+
+| Column | Status | Why |
+|---|---|---|
+| `note` | ⛔ Never reference | Confirmed PII in sampled rows: customer names, personal emails, a wholesale buyer's business email (13 of 25,612 rows) |
+| `comments` | ⛔ Never reference | Confirmed PII in sampled rows: full name + city/state from an Amazon refund complaint (1 of 27 rows) |
+| `tags` | ⛔ Never reference | No PII found in the scan — banned because it is the same free-text category and unaudited going forward |
+
+**Rule:**
+1. **Always list `dim_orders` columns explicitly.** Never `SELECT *`, `do.*`, or `SELECT * EXCEPT(...)` — a `*` would also pick up any free-text column added to the table later.
+2. **Never reference `note`, `comments`, or `tags`** anywhere in a query — not in `SELECT`, `WHERE`, `GROUP BY`, `ORDER BY`, joins, CTEs, or subqueries, not even incidentally.
+3. **Allowed columns:** `order_id` and `discount_codes` by default. Other structured/key columns — `order_key`, `platform_name`, `type`, `order_date`, `order_datetime`, `payment_mode`, `payment_gateway`, `digital_wallet`, `credit_card_type`, `order_channel`, `order_name`, `product_basket`, `category_basket`, `rating`, `feedback_type`, `customer_key`, `ship_address_key`, `bill_address_key`, `effective_start_date`, `effective_end_date`, `last_updated`, `_run_id` — only when a discount-code question actually needs them.
+4. **Never join `dim_orders` onward** to `dim_customer` or `dim_address` through `customer_key`, `ship_address_key`, or `bill_address_key`. The keys may be selected; following them may not.
+5. **If the user asks for order notes, comments, or tags,** decline — say these fields are not available — and do not query them.
+
+#### Join condition
+
+```sql
+-- ⚠ CRITICAL (R-PII-DIMORDERS-01): only structured/key columns from dim_orders — never *, note, comments, tags.
+select
+  lim.*,
+  do.discount_codes
+from `insightsprod.equipfoods_5642_prod_presentation.LineItemMaster` lim
+left join `insightsprod.equipfoods_5642_prod_main.dim_orders` do
+  on lim.order_id = do.order_id
+```
+
+- `LineItemMaster` is always the left (driving) table; `dim_orders` is never the `FROM` table for metrics.
+- Join on `order_id` only, exactly as above.
+- Every `LineItemMaster` rule still applies after the join: `transaction_type` handling (Section 1.12, `R-TRANSACTION-01`), mandatory filters (Section 1.11), the TikTok exclusion (Section 1.16, `R-BUCKET-02`), and the time period rule on `lim.date` (Section 1.1, `R-DATE-01`).
+
+#### Line level → distinct order counts
+
+`LineItemMaster` is line-level, so an order's `discount_codes` value repeats on every line of that order. When rolling up:
+- **Order counts:** `COUNT(DISTINCT order_id)` — never `COUNT(*)` or `COUNT(order_id)`, which count lines, not orders.
+- **Customer counts:** `COUNT(DISTINCT customer_id)`.
+- **Monetary values** (Gross Sales, Discounts, Net Sales, Total Revenue): summing across lines is correct — the amounts are line-level and are not repeated; only the code label repeats.
+
+#### Orders with multiple codes — split into individual codes
+
+`discount_codes` holds every code on the order in one string (e.g. `"SAVE10, FREESHIP"`).
+- Split it into individual codes; an order counts once under **each** code it carries. The same code appearing twice on one order counts once.
+- **Per-code rows therefore do not add up to the overall total.** Example: order #1 (SAVE10, $100), #2 (SAVE10 + FREESHIP, $80), #3 (FREESHIP, $50) → SAVE10 = 2 orders / $180, FREESHIP = 2 orders / $130; rows sum to 4 orders / $310, but the true total is 3 orders / $230.
+- Every per-code breakdown must state: *"Orders with multiple discount codes are counted under each code, so the rows don't add up to the overall total."*
+- If an overall total is needed, compute it separately from the unsplit join — never by summing the per-code rows.
+- For an order with multiple codes, its full line-level amounts (including its full discount amount) sit under each of its codes — the amounts are not apportioned between codes.
+
+#### Orders with no code
+
+Orders whose `discount_codes` is `NULL` or blank are shown as a separate **`'No Discount Code'`** line, included by default. This also covers any `LineItemMaster` order with no matching `dim_orders` row.
+
+#### Query pattern
+
+```sql
+-- ⚠ CRITICAL (R-PII-DIMORDERS-01): only order_id and discount_codes are read from dim_orders.
+-- Never SELECT *, never reference note / comments / tags, never join onward to dim_customer / dim_address.
+WITH order_codes AS (
+  -- One row per order × individual code; the same code twice on one order is kept once
+  SELECT DISTINCT
+    do.order_id,
+    TRIM(code) AS discount_code
+  FROM `insightsprod.equipfoods_5642_prod_main.dim_orders` do,
+    UNNEST(SPLIT(do.discount_codes, ',')) AS code
+  WHERE TRIM(code) != ''
+),
+lim_codes AS (
+  SELECT
+    COALESCE(oc.discount_code, 'No Discount Code') AS discount_code,
+    lim.order_id,
+    lim.customer_id,
+    lim.transaction_type,
+    lim.quantity,
+    lim.item_gross_sales,
+    lim.item_discounts,
+    lim.item_returns,
+    lim.item_shipping_price,
+    lim.item_shipping_tax
+  FROM `insightsprod.equipfoods_5642_prod_presentation.LineItemMaster` lim
+  LEFT JOIN order_codes oc
+    ON lim.order_id = oc.order_id
+  WHERE lim.date >= DATE '[YYYY-MM-DD]' AND lim.date < DATE '[YYYY-MM-DD]'
+  -- plus the standing LineItemMaster default filters (TikTok exclusion, Section 1.16 R-BUCKET-02)
+)
+SELECT
+  discount_code,
+  -- metrics from Section 2.9
+FROM lim_codes
+GROUP BY discount_code
+```
+
+`order_codes` is the same `lim.order_id = do.order_id` join shown above, with `discount_codes` split first. The metrics that go in the final `SELECT` are defined in Section 2.9.
+
+---
+
 ## 2. Metric Definitions, Formulas & Edge Cases
 
 ### 2.1 Revenue Metrics
@@ -678,6 +801,7 @@ ROUND(
   ) * 100
 , 2) AS discount_rate_pct
 ```
+- **By discount code:** when the question breaks Discount Rate out by discount code, use the `LineItemMaster` + `dim_orders` version in Section 2.9, not this cohort-table SQL.
 
 ---
 
@@ -1823,6 +1947,78 @@ ROUND(SAFE_DIVIDE(channel_ltvpc_3m, marketing_channel_cac), 2) AS channel_ltvpc_
 
 ---
 
+### 2.9 Discount Code Metrics
+
+> **Applies only to discount code questions** (Section 1.20, `R-DISCOUNTCODE-01`). All metrics run on the `lim_codes` CTE from Section 1.20 — `LineItemMaster` left-joined to `dim_orders` on `order_id`, with `discount_codes` split into individual codes — grouped by `discount_code`.
+>
+> ⚠ **CRITICAL (`R-PII-DIMORDERS-01`):** every query here reads only `order_id` and `discount_codes` from `dim_orders` — never `SELECT *`, never `note`, `comments`, or `tags`.
+
+**How each metric is rolled up:**
+
+| Metric | Roll-up | Rule applied |
+|---|---|---|
+| Orders | `COUNT(DISTINCT order_id)` on Order rows with `quantity > 0` | Distinct `order_id` because codes repeat on every line (Section 1.20); Order rows only per Section 1.12 |
+| Customers | `COUNT(DISTINCT customer_id)` on Order rows with `quantity > 0`, `customer_id IS NOT NULL` | Section 1.11 customer-level filters |
+| Gross Sales | `SUM(item_gross_sales)` across lines | Line-level amounts — no dedup needed; no `transaction_type` filter (same as Net Sales) |
+| Discounts | `SUM(item_discounts)` across lines | Line-level; no `transaction_type` filter |
+| Net Sales | Net Sales formula, `LineItemMaster` version (Section 2.1) | No `transaction_type` filter — Return rows keep their order's code and reduce that code's Net Sales |
+| Total Revenue | Total Revenue formula, `LineItemMaster` version (Section 2.1) | Shipping terms on Order rows only (⚠ backlog, EF-013) |
+| AOV | Total Revenue ÷ Orders (distinct) | Denominator is the distinct order count above, never a line count |
+| Discount Rate | Discounts ÷ Total Revenue | Same definition as Section 2.1 |
+
+- **Formatting / rounding:** as Section 1.14 — Orders and Customers as counts; Gross Sales, Discounts, Net Sales, Total Revenue, AOV in USD with 0 decimals; Discount Rate as `%` with 2 decimals.
+- **Multi-code caveat:** per-code rows do not add up to the overall total — always state this in the response (Section 1.20). For an overall total, compute the same metrics from the unsplit join.
+- **`'No Discount Code'`** is shown as its own row by default (Section 1.20).
+
+**SQL (final `SELECT` over `lim_codes`, Section 1.20):**
+```sql
+SELECT
+  discount_code,
+  COUNT(DISTINCT CASE WHEN transaction_type = 'Order' AND COALESCE(quantity, 0) > 0
+                      THEN order_id END) AS orders,
+  COUNT(DISTINCT CASE WHEN transaction_type = 'Order' AND COALESCE(quantity, 0) > 0
+                       AND customer_id IS NOT NULL
+                      THEN customer_id END) AS customers,
+  ROUND(SUM(COALESCE(item_gross_sales, 0)), 0) AS total_gross_sales,
+  ROUND(SUM(COALESCE(item_discounts, 0)), 0) AS total_discounts,
+  ROUND(
+    SUM(COALESCE(item_gross_sales, 0))
+    - SUM(COALESCE(item_discounts, 0))
+    - SUM(COALESCE(item_returns, 0))
+  , 0) AS net_sales,
+  ROUND(
+    SUM(COALESCE(item_gross_sales, 0))
+    - SUM(COALESCE(item_discounts, 0))
+    - SUM(COALESCE(item_returns, 0))
+    + SUM(CASE WHEN transaction_type = 'Order' THEN COALESCE(item_shipping_price, 0) ELSE 0 END)
+    - SUM(CASE WHEN transaction_type = 'Order' THEN COALESCE(item_shipping_tax, 0) ELSE 0 END)
+  , 0) AS total_revenue,
+  ROUND(SAFE_DIVIDE(
+    SUM(COALESCE(item_gross_sales, 0))
+    - SUM(COALESCE(item_discounts, 0))
+    - SUM(COALESCE(item_returns, 0))
+    + SUM(CASE WHEN transaction_type = 'Order' THEN COALESCE(item_shipping_price, 0) ELSE 0 END)
+    - SUM(CASE WHEN transaction_type = 'Order' THEN COALESCE(item_shipping_tax, 0) ELSE 0 END),
+    COUNT(DISTINCT CASE WHEN transaction_type = 'Order' AND COALESCE(quantity, 0) > 0
+                        THEN order_id END)
+  ), 0) AS aov,
+  ROUND(SAFE_DIVIDE(
+    SUM(COALESCE(item_discounts, 0)),
+    SUM(COALESCE(item_gross_sales, 0))
+    - SUM(COALESCE(item_discounts, 0))
+    - SUM(COALESCE(item_returns, 0))
+    + SUM(CASE WHEN transaction_type = 'Order' THEN COALESCE(item_shipping_price, 0) ELSE 0 END)
+    - SUM(CASE WHEN transaction_type = 'Order' THEN COALESCE(item_shipping_tax, 0) ELSE 0 END)
+  ) * 100, 2) AS discount_rate_pct
+FROM lim_codes
+GROUP BY discount_code
+ORDER BY orders DESC
+```
+
+The `quantity > 0` and `customer_id IS NOT NULL` conditions sit inside the `CASE` expressions rather than in a `WHERE` clause: a `WHERE` would drop Return rows (negative `quantity`) and break Net Sales, Total Revenue, and Discount Rate in the same query.
+
+---
+
 ## 3. Table Selection & Conflict Resolution
 
 ### 3.1 Table Overview
@@ -1836,13 +2032,16 @@ ROUND(SAFE_DIVIDE(channel_ltvpc_3m, marketing_channel_cac), 2) AS channel_ltvpc_
 | `SubscriptionMaster` | `insightsprod.equipfoods_5642_prod_presentation.SubscriptionMaster` | One row per subscription contract | Subscriber Churn, Cancellation Rates (customer / subscription / line) |
 | `SubscriberCohort` | `insightsprod.equipfoods_5642_prod_presentation.SubscriberCohort` | `acq_month × subscriber dimensions × month_diff` | Skip Rate, Subscription Revenue Retained, Reactivation Rate |
 | `AdvertisingMaster` | `insightsprod.equipfoods_5642_prod_presentation.AdvertisingMaster` | One row per ad per campaign per day (daily ad performance, ~499K rows) — far finer than needed; always aggregate to `ad_month × ad_channel` via `DATE_TRUNC(ad_date, MONTH)` first | Marketing Channel Ad Spend, Marketing Channel CAC, Marketing Channel LTV/CAC (Section 2.8), using only `ad_date`/`ad_channel`/`spend`. Never used for any other metric in this file — see the dedicated `AdvertisingMaster_table_yaml.yaml` for its full real schema (58 columns; a physical BigQuery table, time-partitioned by `ad_date`). |
+| `dim_orders` | `insightsprod.equipfoods_5642_prod_main.dim_orders` — ⚠ `_prod_main` dataset, not `_prod_presentation` | One row per `order_id` (verified 1:1 despite SCD Type 2 columns) | **Discount code analysis only** (Sections 1.20, 2.9), always as `LineItemMaster` LEFT JOIN `dim_orders` on `order_id`. ⚠ **CRITICAL (`R-PII-DIMORDERS-01`):** never `SELECT *`, never `note` / `comments` / `tags`. See the dedicated `dim_orders.yaml` for its full schema. |
 
 **Never query:**
 
-| Table | Reason |
+| Table / Column | Reason |
 |---|---|
 | `customer_360` | PII — never reference |
 | `shopify_conversion_path` | PII — never reference |
+| `dim_orders.note`, `dim_orders.comments`, `dim_orders.tags` | ⚠ **CRITICAL — PII in free text** (`R-PII-DIMORDERS-01`, Section 1.20). Columns only — the rest of `dim_orders` is queryable for discount code analysis. Never `SELECT *` from `dim_orders`, since it would include these. |
+| `dim_customer`, `dim_address` (via `dim_orders` keys) | Never join `dim_orders` onward through `customer_key`, `ship_address_key`, or `bill_address_key` (`R-PII-DIMORDERS-01`) |
 
 ---
 
@@ -1873,6 +2072,11 @@ User question about...
 |        --> LineItemMaster, filter by date
 |   (Never simplified_order_cohorts_v2 for this — see Section 5.4 EF-015)
 |
++-- Discount codes — by code, promo/coupon code, a named code (Section 1.20)?
+|   YES --> LineItemMaster LEFT JOIN dim_orders ON order_id, codes split (Sections 1.20, 2.9)
+|           ⚠ CRITICAL: never SELECT * / note / comments / tags from dim_orders (R-PII-DIMORDERS-01)
+|   (Plain "discounts" / "discount rate" with no code mention --> existing metrics, no dim_orders)
+|
 +-- Lifecycle, purchase funnel, days between orders, OTP→Subscriber conversion,
 |   SKU mix, Gross Margin, Return Rate (by order date), SKU Repurchase Rate?
 |   YES --> LineItemMaster
@@ -1901,6 +2105,11 @@ User question about...
 | `LineItemMaster` (Order/Customer counts) | Must apply `WHERE transaction_type = 'Order'` |
 | `SubscriberCohort` | Customer-level subscriber churn → use `SubscriptionMaster` |
 | `SubscriptionMaster` | Skip Rate or Subscription Revenue Retained → use `SubscriberCohort` |
+| `dim_orders` | ⚠ **CRITICAL:** Never `SELECT *` and never reference `note`, `comments`, or `tags` — in any query, for any purpose (`R-PII-DIMORDERS-01`, Section 1.20) |
+| `dim_orders` | Anything other than discount code analysis — it is not a general source of order attributes |
+| `dim_orders` | As the driving (`FROM`) table for metrics → always `LineItemMaster` LEFT JOIN `dim_orders` |
+| `dim_orders` | Joining onward to `dim_customer` / `dim_address` → never (`R-PII-DIMORDERS-01`) |
+| `dim_orders` | Plain "discounts" / "discount rate" with no mention of codes → use the existing Discounts / Discount Rate metrics, no join |
 
 ---
 
@@ -1971,6 +2180,24 @@ ON a.customer_id = b.customer_id
 ```
 
 **No date join needed** unless filtering to a specific subscription start date window — use `subscription_start_date` or `MIN(subscription_start_date)` per customer depending on grain.
+
+#### `LineItemMaster` ↔ `dim_orders`
+
+**Join key:** `order_id`. Discount code analysis only (Section 1.20).
+
+```sql
+-- ⚠ CRITICAL (R-PII-DIMORDERS-01): only structured/key columns from dim_orders — never *, note, comments, tags.
+select
+  lim.*,
+  do.discount_codes
+from `insightsprod.equipfoods_5642_prod_presentation.LineItemMaster` lim
+left join `insightsprod.equipfoods_5642_prod_main.dim_orders` do
+  on lim.order_id = do.order_id
+```
+
+- `LineItemMaster` is always the left (driving) table.
+- `LineItemMaster` is line-level, so `discount_codes` repeats on every line of an order — use `COUNT(DISTINCT order_id)` for order counts (Section 1.20).
+- `dim_orders` lives in `_prod_main`, not `_prod_presentation` — always use its full path.
 
 ---
 
@@ -2104,6 +2331,26 @@ ON a.customer_id = b.customer_id
 | `ad_channel` | Raw ad platform | `'GOOGLE'`, `'FACEBOOK'`, `'TIKTOK'`, `'AMAZON'`, or other — map to Unified Marketing Channel per Section 2.8 before joining to cohort data; never use `ad_channel` directly against cohort-side channel columns |
 | `spend` | Ad spend | SUM, aggregated to `ad_month × unified_marketing_channel` before joining — see Section 2.8 |
 | `sku`, `category`, `sub_category`, `product_name` | Product dimensions on the ad | Not used by any metric in this file — Section 2.8 only uses `ad_date`/`ad_channel`/`spend` |
+
+#### `dim_orders`
+
+Full path `insightsprod.equipfoods_5642_prod_main.dim_orders` (`_prod_main` dataset). Discount code analysis only — Section 1.20.
+
+> ⚠ **CRITICAL (`R-PII-DIMORDERS-01`):** never `SELECT *`; never reference `note`, `comments`, or `tags`; never join onward to `dim_customer` / `dim_address`.
+
+| Column | Description | Notes |
+|---|---|---|
+| `order_id` | Order identifier | ✅ Join key to `LineItemMaster.order_id` |
+| `discount_codes` | All discount codes on the order, in one string | ✅ Default column — split into individual codes (Section 1.20) |
+| `order_key`, `platform_name`, `type`, `order_date`, `order_datetime`, `order_name`, `order_channel` | Order attributes | ✅ Allowed only when a discount-code question needs them |
+| `payment_mode`, `payment_gateway`, `digital_wallet`, `credit_card_type` | Payment attributes (`payment_gateway`, `digital_wallet`, `credit_card_type` are Shopify-only) | ✅ Allowed only when a discount-code question needs them |
+| `product_basket`, `category_basket` | Products / categories in the order | ✅ Allowed only when a discount-code question needs them |
+| `rating`, `feedback_type` | Customer rating (1–5) and its category | ✅ Allowed only when a discount-code question needs them |
+| `customer_key`, `ship_address_key`, `bill_address_key` | Surrogate keys to `dim_customer` / `dim_address` | ✅ May be selected — ⛔ never joined onward |
+| `effective_start_date`, `effective_end_date`, `last_updated`, `_run_id` | SCD Type 2 / pipeline tracking | ✅ Allowed; not needed for the discount join (grain is 1:1) |
+| `note` | Free-text order note | ⛔ **Never reference** — confirmed PII (names, personal/business emails) |
+| `comments` | Free-text customer feedback | ⛔ **Never reference** — confirmed PII (full name + city/state) |
+| `tags` | Free-text order tags | ⛔ **Never reference** — same free-text category, unaudited |
 
 ---
 
@@ -2339,6 +2586,7 @@ Skip Rate and Subscription Revenue Retained come from `SubscriberCohort`, not `S
 | EF-015 | `simplified_order_cohorts_v2` must never be used for business-level (transactional) questions (Section 1.17) — verified via BigQuery for May 2026: grouping by `order_month` alone matches `LineItemMaster` / `simplified_customer_cohorts_v2` exactly on gross sales ($9,066,388) and discounts ($1,380,359), but Returns comes in ~21% low ($136,424 vs. the true $173,584) — Net Sales computed this way is therefore overstated by ~$37K for that month. Shipping fields (`shipping_price_total`, `shipping_tax_total`) matched exactly, so the gap is isolated to Returns attribution across `order_number`. Use `LineItemMaster` (order-level dimensions) or `simplified_customer_cohorts_v2` via `order_month` (acquisition-level dimensions) instead; `simplified_order_cohorts_v2` remains valid only for its native cohort-level, order-sequence questions. |
 | EF-016 | ⚠ **Needs validation.** The Order Cohorts CTE (Section 3.7) and the order-sequence-anchored variants of Revenue Acquired, Discount Rate, Revenue Retention, CAC, LTR, LTRPC, LTV, LTVPC, LTV/CAC, and OPC are mechanically mirrored from the equivalent, stakeholder-validated `month_diff` versions, substituting `order_number` as the progression field. Verified against BigQuery: `customers_acquired` at `order_number = 1` matches `month_diff = 0` exactly for a sample cohort (17,893 = 17,893), `adspend` is confirmed non-zero only at `order_number = 1`, and revenue decays proportionally across `order_number` the same way it does across `month_diff`. Not yet verified: the resulting running-revenue/LTV totals have not been independently reconciled against a dashboard or other source of truth. Added per explicit user confirmation that `simplified_order_cohorts_v2` backs these metrics in the Order View dashboard. |
 | EF-017 | ⚠ **Needs validation** (3 of the original 5 divergences remain — the 1st is resolved by EF-012's reinstatement, and the 3rd is now largely resolved by Section 2.8 also blocking TikTok, see below). Section 2.8 (Marketing Channel LTV & CAC) documents the *target* logic for IQ, confirmed directly by the client — the live Tableau worksheet (`17.Channel CAC, LTV`) still implements it differently in three ways, found by inspecting the .twb directly: ~~(1) its LTV-per-customer fields subtract actual per-line `cogs` rather than using the flat 55% Total Revenue formula in Section 2.8~~ — **resolved**: Section 2.8 now also uses actual `cogs` as primary (EF-012), so this is no longer a divergence; (2) its ad-spend blend has no date key at all (no field on either shelf ties `ad_month` to `acq_month`), so the worksheet's Ad Spend/CAC reflects Advert Master's all-time total per channel regardless of the selected acquisition period, unlike Section 2.8's explicit `ad_month = acq_month` join; ~~(3) its Ad Spend formula (`Total Ad Spend fin`) explicitly nulls any row where the attribution-mapped channel equals literal `"TikTok Shops"` — but only when Attribution Type = "Northbeam Channel" (the default); switching to "IDDA Channel" or "Last Click Channel" silently stops the exclusion, since those models spell TikTok as `"ads - tiktokgmvmax"`. Section 2.8 does not exclude TikTok at all, by client instruction~~ — **largely resolved**: Section 2.8 now also blocks TikTok ad spend (by client instruction, current as of this edit), so both sides exclude it — the remaining difference is mechanism only: the Tableau worksheet's exclusion is conditional on Attribution Type (only fires under "Northbeam Channel"), while Section 2.8's is unconditional (TikTok always maps to `'NA'`, regardless of any attribution setting, since this view has no such parameter); (4) its Channel Grouping 1/2 filters exist only on the cohort side (Advert Master has no matching columns), so they narrow which channel rows are visible but never restrict ad spend — a visual/blend limitation the client has confirmed is acceptable for the dashboard, unlike IQ (Section 2.8), which should apply the cascade; (5) the SQL embedded in the .twb for the `Advert Master` data source has no `'AMAZON'` branch in its `unified_marketing_channel` CASE (3 branches: Google/Facebook/TikTok + `ELSE 'NA'`) — the client confirmed the Amazon branch (mapping to `'Unattributed- Amazon'`) has since been added at the source, so Section 2.8 documents the 4-branch version as current. Expect IQ's answers on this metric to disagree with the live dashboard until the dashboard is rebuilt to match; that is expected, not a bug in either. |
+| EF-018 | ⚠ **Needs validation.** `dim_orders.discount_codes` is documented as a `STRING_AGG` of all codes on the order, but the separator is not confirmed. The Section 1.20 query pattern splits on `,` and trims spaces, which handles both `","` and `", "`; if the real separator differs, the split must be updated. Also: the `'No Discount Code'` line includes both orders with no code and any `LineItemMaster` order with no matching `dim_orders` row — the two are not distinguished. |
 
 ### 5.5 Out-of-Scope Metrics
 
@@ -2347,6 +2595,7 @@ Skip Rate and Subscription Revenue Retained come from `SubscriberCohort`, not `S
 | CVR / ROAS / ACoS / CTR / CPC | No session or impression data in the presentation layer |
 | Customer PII (email, address, phone) | `customer_360` or any other customer data is never queryable |
 | Conversion path attribution | `shopify_conversion_path` is never queryable |
+| Order notes, comments, tags | `dim_orders.note` / `comments` / `tags` are free text with confirmed PII — never queryable (⚠ CRITICAL, `R-PII-DIMORDERS-01`, Section 1.20) |
 
 ---
 
