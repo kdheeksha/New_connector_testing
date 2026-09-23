@@ -311,7 +311,8 @@ Two perspectives exist and produce different numbers:
 | Entity | Column | Table(s) |
 |---|---|---|
 | Customer | `customer_id` | `LineItemMaster`, `SubscriptionMaster`, `SubscriberCohort` |
-| Order | `order_id` | `LineItemMaster`; `dim_orders` (join key for discount code analysis only — Section 1.20) |
+| Order | `order_id` | `LineItemMaster` |
+| Order (discount code analysis only) | `order_id` | `dim_orders` — join key only, Section 1.20 |
 | Subscription Contract | `subscription_id` | `SubscriptionMaster` |
 | Subscription Line | `subscription_line_id` | `SubscriptionMaster` |
 | Acquisition Month | `acq_month` | All cohort tables |
@@ -2054,7 +2055,7 @@ The Order-row / `quantity > 0` conditions are applied inside `order_level` (as `
 
 **Never query:**
 
-| Table / Column | Reason |
+| Table | Reason |
 |---|---|
 | `customer_360` | PII — never reference |
 | `shopify_conversion_path` | PII — never reference |
