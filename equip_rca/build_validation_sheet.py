@@ -3,8 +3,14 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.formatting.rule import FormulaRule
 from openpyxl.utils import get_column_letter
 
-SRC = '../cohort_validation_before_after.xlsx'
-OUT = 'Equip cohort validation - before vs after.xlsx'
+# Self-contained: all three grids live in data/ as TSV, so this script
+# regenerates the workbook from the repo with no external dependency.
+#   data/client_grid.tsv  the client's Equip LTV analysis, carried over
+#                         unchanged from their workbook
+#   data/before_lim.tsv   output of sql/10_before_logic_lim.sql
+#   data/lim_full.tsv     output of sql/09_production_lim.sql
+DATA = 'data'
+OUT  = 'Equip cohort validation - before vs after.xlsx'
 
 COHORTS = ['2025-09','2025-10','2025-11','2025-12','2026-01','2026-02',
            '2026-03','2026-04','2026-05','2026-06','2026-07']
@@ -15,27 +21,22 @@ SEC = [('LIFETIME — all customers','All customers', 4),
 # offsets from section start
 OURS, CLIENT, DIFF = 3, 17, 31      # data rows begin here
 
-# ---- pull client grid and the Before (OLM) grid out of the old workbook ----
-src = openpyxl.load_workbook(SRC)
-def grab(tab, base, off):
-    ws = src[tab]; out = {}
-    for i, c in enumerate(COHORTS):
-        r = base + off + i
-        out[c] = (ws.cell(r,2).value, [ws.cell(r,col).value for col in range(3,14)])
-    return out
+import os
 
-client, before = {}, {}
-for _, bucket, base in SEC:
-    client[bucket] = grab('Before logic', base, CLIENT)
-    before[bucket] = grab('Before logic', base, OURS)
+def load_grid(name):
+    g = {}
+    for ln in open(os.path.join(DATA, name)):
+        p = ln.rstrip('\n').split('\t')
+        vals = [float(x) for x in p[3:]]
+        vals += [None] * (11 - len(vals))
+        g.setdefault(p[0], {})[p[1]] = (int(p[2]), vals)
+    return g
+
+client = load_grid('client_grid.tsv')
+before = load_grid('before_lim.tsv')
 
 # ---- the new LIM "After" grid ----
-after = {}
-for ln in open('lim_full.tsv'):
-    p = ln.rstrip('\n').split('\t')
-    vals = [float(x) for x in p[3:]]
-    vals += [None] * (11 - len(vals))
-    after.setdefault(p[0], {})[p[1]] = (int(p[2]), vals)
+after  = load_grid('lim_full.tsv')
 
 # ---- styling ----
 H1   = Font(bold=True, size=13, color='18181B')
@@ -133,11 +134,16 @@ NOTES = [
  'Colour scale is on the ABSOLUTE difference: GREEN within 2%, AMBER 2-5%, RED beyond 5%.',
  '% Diff cells are live formulas and calculate when opened in Excel.',
  '',
- 'SOURCES - the two tabs are built from different tables, and this is deliberate.',
- '  Before tab: OrderLinesMaster + ReturnLinesMaster (sql/05a, logic "A old").',
- '  After tab:  LineItemMaster (sql/09_production_lim.sql), the production query.',
- '  The two tables agree to within 0.08% on identical logic, verified across all 11 cohorts and both '
-   'buckets, so the tabs are comparable. LineItemMaster is simply the other two tables combined.',
+ 'SOURCES - both tabs come from LineItemMaster, so only the logic differs between them.',
+ '  Before tab: sql/10_before_logic_lim.sql - acquisition bucket for life, no Faire.',
+ '  After tab:  sql/09_production_lim.sql   - attribution fixed, Faire included.',
+ '  Both were validated against the earlier OrderLinesMaster + ReturnLinesMaster build, which they '
+   'reproduce to within 0.08% across all 11 cohorts and both buckets. LineItemMaster is simply those '
+   'two tables combined, so this is a change of source, not of method.',
+ '  Cross-check that holds in the data: the two tabs have IDENTICAL customer counts before 2026-02, '
+   'and from 2026-02 the After tab is higher by exactly the Faire retailers - +17 Feb, +33 Mar, '
+   '+25 Apr, +37 May, +33 Jun, +46 Jul. Subscription M0 is identical on both tabs in every cohort, '
+   'because every Faire order is OTP.',
  '',
  'METHOD',
  'LTR = gross sales - item discounts + shipping - shipping tax, net of returns. Shopify only; test '
