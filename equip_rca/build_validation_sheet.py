@@ -49,9 +49,18 @@ SECF = PatternFill('solid', fgColor='EFEFF1')
 thin = Side(style='thin', color='D4D4D8')
 BOX  = Border(top=thin, bottom=thin, left=thin, right=thin)
 
-GREEN = PatternFill('solid', fgColor='D1FADF')
-AMBER = PatternFill('solid', fgColor='FEF0C7')
-RED   = PatternFill('solid', fgColor='FEE4E2')
+# Conditional-formatting fills are DIFFERENTIAL styles (dxf), and Excel
+# paints those from the pattern's bgColor, not fgColor. A dxf written as
+# solid+fgColor renders as nothing at all. The colour also needs the
+# full 8-digit ARGB: a 6-digit value gets a 00 alpha prefix, i.e. fully
+# transparent. Earlier versions of this sheet had both faults, which is
+# why the colour coding never appeared.
+GREEN = PatternFill(bgColor='FFD1FADF')
+AMBER = PatternFill(bgColor='FFFEF0C7')
+RED   = PatternFill(bgColor='FFFEE4E2')
+GREENF = Font(color='FF05603A', size=10)
+AMBERF = Font(color='FF93370D', size=10)
+REDF   = Font(color='FF912018', size=10, bold=True)
 
 def block(ws, base, label, data, numfmt='#,##0.00'):
     ws.cell(base, 1, label).font = H2
@@ -93,11 +102,13 @@ def diffblock(ws, base, ours_row0, client_row0):
     rng = 'B%d:M%d' % (hr + 1, hr + 11)
     # absolute-value bands; order matters, first match wins
     ws.conditional_formatting.add(rng, FormulaRule(
-        formula=['AND(ISNUMBER(B%d),ABS(B%d)>0.05)' % (hr+1, hr+1)], fill=RED, stopIfTrue=True))
+        formula=['AND(ISNUMBER(B%d),ABS(B%d)>0.05)' % (hr+1, hr+1)],
+        fill=RED, font=REDF, stopIfTrue=True))
     ws.conditional_formatting.add(rng, FormulaRule(
-        formula=['AND(ISNUMBER(B%d),ABS(B%d)>0.02)' % (hr+1, hr+1)], fill=AMBER, stopIfTrue=True))
+        formula=['AND(ISNUMBER(B%d),ABS(B%d)>0.02)' % (hr+1, hr+1)],
+        fill=AMBER, font=AMBERF, stopIfTrue=True))
     ws.conditional_formatting.add(rng, FormulaRule(
-        formula=['ISNUMBER(B%d)' % (hr+1)], fill=GREEN))
+        formula=['ISNUMBER(B%d)' % (hr+1)], fill=GREEN, font=GREENF))
 
 def tab(wb, title, heading, strap, ours):
     ws = wb.create_sheet(title)
