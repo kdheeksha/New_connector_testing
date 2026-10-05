@@ -82,7 +82,7 @@ def block(ws, base, label, data, numfmt='#,##0.00'):
 
 def diffblock(ws, base, ours_row0, client_row0):
     ws.cell(base, 1,
-      '% Diff  =  (ours − client) ÷ client      [green ≤2%  ·  amber 2–5%  ·  red >5%]').font = H2
+      '% Diff  =  (ours − client) ÷ ours      [green ≤2%  ·  amber 2–5%  ·  red >5%]').font = H2
     hr = base + 1
     ws.cell(hr, 1, 'Acquisition Month').font = HDR; ws.cell(hr, 1).fill = HDRF
     ws.cell(hr, 2, 'Customers').font = HDR; ws.cell(hr, 2).fill = HDRF
@@ -95,8 +95,12 @@ def diffblock(ws, base, ours_row0, client_row0):
         for j in range(12):                      # customers + M0..M10
             col = get_column_letter(2 + j)
             c = ws.cell(r, 2 + j)
+            # (ours - client) / OURS -- the convention used by the
+            # Cohorts Dashboard validation sheet, so these tie back to
+            # the numbers people already know. Dividing by the client
+            # instead makes every gap look larger.
             c.value = '=IFERROR((%s%d-%s%d)/%s%d,"")' % (
-                col, ours_row0 + i, col, client_row0 + i, col, client_row0 + i)
+                col, ours_row0 + i, col, client_row0 + i, col, ours_row0 + i)
             c.number_format = '+0.00%;-0.00%;0.00%'
             c.border = BOX
     rng = 'B%d:M%d' % (hr + 1, hr + 11)
@@ -140,8 +144,14 @@ tab(wb, 'After logic', 'AFTER — attribution fixed, Faire included',
 NOTES = [
  'Notes',
  'Cumulative LTR PER CUSTOMER. Dollars = this value x the Customers column.',
- '% Diff = (ours - client) / client. NOTE: this is the OPPOSITE SIGN to earlier versions of this '
-   'sheet, which used (client - ours). It now matches the RCA document. A negative % means we are BELOW the client.',
+ '% Diff = (ours - client) / OURS. This matches the Cohorts Dashboard validation sheet, so the '
+   'figures tie back to what people already know. A negative % means we are BELOW the client.',
+ 'Watch the denominator when comparing against anything else. Dividing by the client instead makes '
+   'every gap look bigger - Sep-25 OTP at M10 is 33% one way and 50% the other, on identical data. '
+   'It is the same $320,947 gap either way.',
+ 'Small caveat: this sheet diffs PER-CUSTOMER values, while the Cohorts Dashboard validation sheet '
+   'diffs TOTAL revenue. Where the two sides have slightly different customer counts the percentages '
+   'differ by up to about one point (Sep-25 OTP M10: 33.8% here, 33.1% there).',
  'Colour scale is on the ABSOLUTE difference: GREEN within 2%, AMBER 2-5%, RED beyond 5%.',
  '% Diff cells are live formulas and calculate when opened in Excel.',
  '',
@@ -164,6 +174,16 @@ NOTES = [
    'from the presentation layer by a channel filter and so appear in neither table.',
  'October 2026 is a partial month and is excluded, so the last month shown varies by cohort.',
  'Client rows are from Cohorts_Dashboard_Complete_Validation_Sheet "Month View", identical on both tabs.',
+ '',
+ 'CHECKED AGAINST THE LIVE DASHBOARD',
+ 'The Before tab was compared cell by cell against the Cohorts Dashboard block in '
+   'Cohorts_Dashboard_Complete_Validation_Sheet (OTP and Subscription blocks, overlapping months): '
+   '132 cells, mean difference 0.16%, worst 0.48%, none above 1%. The Before tab does reproduce '
+   'production.',
+ 'One deliberate exception: July OTP holds 6,413 customers here against 7,352 on the dashboard. '
+   'That is the $0 giveaway rule, which production does not apply.',
+ 'That dashboard extract stops at July 2026; these runs go to September 2026, so the last month or '
+   'two of each cohort has no dashboard counterpart to compare against.',
  '',
  'RESULT',
  'Before: 102 of 198 cells are more than 5% out, worst 51.1%, mean 9.7%.',
