@@ -76,26 +76,53 @@ so the two tabs stay comparable. 0.1% — inside the 0.5% tolerance, but noted.)
 
 ---
 
-## 3. Which source table — and why it mattered more than expected
+## 3. The baseline we build on — and a gap we never explained
 
 This cost us several rounds and is the single most likely thing to confuse
 someone re-running the work, so it goes before the changes.
 
-There are two candidate sources and they do **not** agree:
+Two ways of building the same measure, and they do **not** agree:
 
-| | reproduces the published dashboard (March, worst cell) |
+| built from | reproduces the published dashboard (March, worst cell) |
 |---|---|
 | `LineItemMaster` | **3.73% off** |
 | `OrderLinesMaster` + `ReturnLinesMaster` | **0.20% off** |
 
-For most of the investigation we built on `LineItemMaster` and carried an
-unexplained **1.2–3.7% residual**, which I repeatedly told the team to accept as
-noise. It was not noise — it was the wrong table. `OrderLinesMaster` applies
-`is_test` and `is_gift_card` exclusions that `LineItemMaster` does not surface
-the same way, and those account for most of the difference.
+For most of the investigation we built on `LineItemMaster` and carried a
+**1.2–3.7% residual**, which I repeatedly told the team to accept as noise. It
+is not noise, and the `OrderLinesMaster` build is clearly the better baseline.
 
-**A second finding fell out of the same comparison: the published dashboard is
-already net of returns.**
+**But we never established *why*, and it is not safe to call this a property of
+the tables.** The two sets of runs differ in three ways at once, so the gap
+cannot be attributed to the table choice:
+
+| | the `LineItemMaster` runs | the `OrderLinesMaster` runs |
+|---|---|---|
+| revenue term | `item_gross_sales − item_discounts` | `item_subtotal_price − item_discount` |
+| returns | `item_returns`, a column on the order row | rows in `ReturnLinesMaster` |
+| exclusions | none applied | `is_test = false`, `is_gift_card = false` |
+
+Any of the three could produce a 1–4% offset, and we isolated none of them.
+
+**The returns difference is the better suspect, and not the exclusions.** A
+return carried as a column on the order row dates to the *order's* month; a
+`ReturnLinesMaster` row dates to the *return's* month. That shifts revenue
+between month indices rather than changing the total — which fits the error we
+saw, smallest at M0 (+1.17%) and growing to 3.73% further out. A flat `is_test` /
+`is_gift_card` exclusion would remove a roughly constant slice at every month
+index, so it does not fit a drift. This is reasoning from the shape of the
+error, not a measurement: treat it as the first thing to test, not as the answer.
+
+> **Correction.** An earlier version of this document said `OrderLinesMaster`
+> applies `is_test` and `is_gift_card` exclusions that `LineItemMaster` "does not
+> surface the same way, and those account for most of the difference." That was
+> an inference I inserted to make a measured gap feel explained. It is not
+> supported: I never read either model's SQL, and our own `LineItemMaster`
+> queries simply never applied those filters — which says what we did, not what
+> the table offers.
+
+**A second finding fell out of the same comparison, and this one is measured:
+the published dashboard is already net of returns.**
 
 ```
 published March M0 total            1,093,954
@@ -110,9 +137,12 @@ never optional.
 `OrderLinesMaster + ReturnLinesMaster`, net of returns.** If the After logic is
 implemented, it should use the same.
 
-> *Not verified:* we never read `LineItemMaster`'s model SQL to confirm exactly
-> how it unions `OrderLinesMaster` and `ReturnLinesMaster`, nor built the
-> line-by-line bridge the brief asks for. See §11.
+> *Not verified:* we never read either model's SQL, nor built the line-by-line
+> bridge the brief asks for. To close this properly, rebuild the same measure
+> from `LineItemMaster` changing **one** thing at a time — first add the `is_test`
+> and `is_gift_card` filters, then swap the returns source — and see which step
+> moves the number. `sql/03_source_table_check.sql` is the starting point, not
+> that experiment. See §11.
 
 ---
 
@@ -423,8 +453,9 @@ plainly rather than buried:
 
 Consequently the brief's §3 bridge table (`LineItemMaster` reconciled to
 `OrderLinesMaster`, reason by reason) is **not** in this document. We know the
-size of the gap (3.73% vs 0.20% against the published dashboard) and the most
-likely cause (`is_test` / `is_gift_card`), but not the line-by-line attribution.
+size of the gap (3.73% vs 0.20% against the published dashboard) and we know
+three candidate causes, but we isolated none of them — see the correction in §3,
+which replaced an unsupported explanation I had given for it.
 
 **Three exports asked for are not here.** `march_cohort_customer_level.csv` and
 `faire_retailers_march.csv` both need customer-level warehouse extracts that were

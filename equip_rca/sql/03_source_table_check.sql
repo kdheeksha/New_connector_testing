@@ -13,10 +13,21 @@
 --   orders only          1,109,523   +1.42%
 --   net of returns       1,093,509   -0.04%   <-- the baseline we adopt
 --
--- CAVEAT: the LineItemMaster leg below is written from its published
--- column names and was NOT re-run in the session that produced this
--- document. The 3.73% figure quoted in the doc comes from earlier runs.
--- Treat this leg as unverified until executed.
+-- CAVEAT: the LineItemMaster leg below reproduces what our LineItemMaster
+-- runs actually DID, so it is the starting point for the gap, not an
+-- explanation of it. Note it uses a different revenue term
+-- (item_gross_sales - item_discounts), takes returns from the
+-- item_returns column rather than ReturnLinesMaster, and applies no
+-- is_test / is_gift_card filter -- three differences at once, which is
+-- why the 1.2-3.7% gap was never attributable to the table choice.
+--
+-- To actually isolate it, run this four times, changing ONE thing per
+-- run: (1) as written, (2) + is_test/is_gift_card filters, (3) + returns
+-- from ReturnLinesMaster instead of item_returns, (4) + item_subtotal_price
+-- in place of item_gross_sales. Whichever step moves the number is the
+-- cause. See doc section 3.
+--
+-- Was NOT re-run in the session that produced this document.
 --
 -- Read-only. Single SELECT.
 -- =====================================================================
